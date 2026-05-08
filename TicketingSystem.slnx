@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ApiGateway/ApiGateway.csproj" />
+  <Project Path="Booking.API/Booking.API.csproj" />
+  <Project Path="Catalog.API/Catalog.API.csproj" />
+  <Project Path="PaymentProcessor.Worker/PaymentProcessor.Worker.csproj" />
+</Solution>

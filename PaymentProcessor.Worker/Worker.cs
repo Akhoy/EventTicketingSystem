@@ -90,7 +90,7 @@ public class Worker : BackgroundService
             dbContext.TicketOrders.Add(ticketOrder);
             await dbContext.SaveChangesAsync(stoppingToken);
 
-            _logger.LogInformation("Payment processed and order saved to database for Seat: {SeatId}, User: {UserId}", seatId, userId);
+            _logger.LogInformation("Payment processed and order saved to database for Seat: {SeatId}, User: {UserId}", seatId, userId);            
             
             // _logger.LogInformation($"[RECEIVED] New order to process: {message}");
 
@@ -104,6 +104,35 @@ public class Worker : BackgroundService
             // If the worker crashes BEFORE this line runs, RabbitMQ puts the message back in the queue!
             // deliveryTag: This is a unique identifier for the message that RabbitMQ uses to track which messages have been acknowledged. multiple: false means we are only acknowledging this single message, not multiple messages at once.
             await _channel.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
+
+            // now, publish an event to the rabbit mq exchange to notify other services (e.g., Notification Service) that the payment was successful and the order is processed. This allows for decoupled communication between services, where the Payment Processor can simply publish an event without needing to know which services will consume it or what they will do with it.
+            // create the event message with relevant details (e.g., seatId, userId, timestamp). this is an anonymous object that we will serialize to JSON and publish to RabbitMQ. The event contains the seatId, userId, and the time when the payment was processed. This information can be useful for other services that consume this event, such as a Notification Service that might want to send a confirmation email to the user.
+            var paymentProcessedEvent = new {
+                SeatId = seatId,
+                UserId = userId,
+                ProcessedAt = DateTime.UtcNow
+            };
+            
+            // Serialize the event message to JSON so we can send it as a string in RabbitMQ. This converts our event object into a JSON string format, which is a common way to represent structured data in a text format that can be easily transmitted and parsed by other services.
+            var eventMessage = System.Text.Json.JsonSerializer.Serialize(paymentProcessedEvent);
+            // Convert the JSON string to a byte array, since RabbitMQ messages are sent as byte arrays. We need to convert our event message from a string to a byte array before we can publish it to RabbitMQ. UTF-8 encoding is used to ensure that the string is properly encoded as bytes, which is important for correctly transmitting the message and avoiding issues with character encoding.
+            var eventBody = Encoding.UTF8.GetBytes(eventMessage);
+            // declare a fanout exchange (if not already declared) to publish the event. A fanout exchange is a type of RabbitMQ exchange that routes messages to all of the queues that are bound to it, regardless of routing keys. This is useful for broadcasting events to multiple services that may be interested in the same event.
+            await _channel.ExchangeDeclareAsync(
+                exchange: "ticket_events", 
+                type: ExchangeType.Fanout, 
+                durable: true, 
+                autoDelete: false, 
+                arguments: null,
+                cancellationToken: stoppingToken);
+            // publish the event message to the exchange. This sends our payment processed event to the "ticket_events" exchange in RabbitMQ, where it can be consumed by any service that is listening for events from that exchange (e.g., a Notification Service that sends confirmation emails). The routing key is empty for a fanout exchange because it will route the message to all bound queues regardless of the routing key.
+            // Why publish to an exchange instead of a queue? Publishing to an exchange allows for more flexible and decoupled communication between services. By using an exchange, we can have multiple queues bound to it, and any message published to the exchange will be routed to all of those queues. This means that we can have multiple services consuming the same event without needing to know about each other or manage direct queue interactions. It promotes a more scalable and maintainable architecture where services can independently subscribe to events they are interested in without tight coupling.
+            // exchange is an event bus concept that allows us to publish messages without needing to know which specific queues or services will consume them. It decouples the producer (Payment Processor) from the consumers (e.g., Notification Service), allowing for more flexible and scalable communication between services. What is an event bus? An event bus is a messaging infrastructure that allows different services to communicate with each other by publishing and subscribing to events. It enables a decoupled architecture where services can produce and consume events without needing direct references to each other, promoting scalability and maintainability in a microservices environment.
+            await _channel.BasicPublishAsync(
+                exchange: "ticket_events", 
+                routingKey: string.Empty, // routing key is ignored for fanout exchanges
+                body: eventBody);
+            _logger.LogInformation("Published TicketPurchased Integration Event for Seat {SeatId} to the Event Bus!", seatId);
         };
 
         // 5. Start consuming!

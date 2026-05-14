@@ -33,6 +33,11 @@ services:
     #   - RABBITMQ_DEFAULT_USER=admin
     #   - RABBITMQ_DEFAULT_PASS=admin
 
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+
   sql-server:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
@@ -75,14 +80,16 @@ services:
       context: ./Catalog.API
       dockerfile: Dockerfile
     # Map localhost:5001 on your browser to the internal container port 8080
-    # ports:
-    #   - "5001:8080"
+    #ports:
+    #  - "5001:8080"
     # Inject Environment Variables directly into the container
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__MongoDb=mongodb://mongo:27017
+      - ConnectionStrings__RabbitMQ=amqp://guest:guest@rabbitmq:5672      
     # Tells Docker: "Do not start this API until the Redis container is up and running"
     depends_on:
-      - redis
+      - mongo
 
 
   # The Booking Service (Handles reserving tickets)

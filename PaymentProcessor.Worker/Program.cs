@@ -10,6 +10,7 @@ var connectionString = builder.Configuration.GetConnectionString("SqlServer");
 // by default has a scoped lifetime, which means a new instance is created for each request. In a worker service, this is typically sufficient, as the DbContext will be used within the scope of a single operation (e.g., processing a message from RabbitMQ). However, if you need to share the DbContext across multiple operations or threads, you may want to consider using a different lifetime (e.g., singleton) and managing the DbContext's lifecycle manually to ensure thread safety and proper disposal.
 builder.Services.AddDbContext<TicketDbContext>(options =>
     options.UseSqlServer(connectionString));
+// what is a hosted service? A hosted service is a background task that runs alongside the main application. It is typically used for tasks that need to run continuously or on a schedule, such as processing messages from a queue, performing background maintenance, or running periodic jobs. In this case, we are adding a hosted service called Worker, which will handle the background processing of ticket orders. By registering it with the dependency injection container, we ensure that it will be started automatically when the application runs and can take advantage of the services and configurations defined in the application.
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();

@@ -31,3 +31,11 @@
 /Users/akhoy/Programming/Ticketing_System/Catalog.API/obj/Debug/net10.0/Catalog.API.pdb
 /Users/akhoy/Programming/Ticketing_System/Catalog.API/obj/Debug/net10.0/Catalog.API.genruntimeconfig.cache
 /Users/akhoy/Programming/Ticketing_System/Catalog.API/obj/Debug/net10.0/ref/Catalog.API.dll
+/Users/akhoy/Programming/Ticketing_System/Catalog.API/bin/Debug/net10.0/DnsClient.dll
+/Users/akhoy/Programming/Ticketing_System/Catalog.API/bin/Debug/net10.0/MongoDB.Bson.dll
+/Users/akhoy/Programming/Ticketing_System/Catalog.API/bin/Debug/net10.0/MongoDB.Driver.dll
+/Users/akhoy/Programming/Ticketing_System/Catalog.API/bin/Debug/net10.0/RabbitMQ.Client.dll
+/Users/akhoy/Programming/Ticketing_System/Catalog.API/bin/Debug/net10.0/SharpCompress.dll
+/Users/akhoy/Programming/Ticketing_System/Catalog.API/bin/Debug/net10.0/Snappier.dll
+/Users/akhoy/Programming/Ticketing_System/Catalog.API/bin/Debug/net10.0/ZstdSharp.dll
+/Users/akhoy/Programming/Ticketing_System/Catalog.API/obj/Debug/net10.0/Catalog.API.sourcelink.json

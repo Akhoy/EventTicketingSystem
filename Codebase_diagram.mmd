@@ -1,0 +1,62 @@
+graph TB
+    Client["👤 Client"]
+    
+    subgraph "API Gateway"
+        AG["ApiGateway<br/>(Reverse Proxy)"]
+    end
+    
+    subgraph "Microservices"
+        CA["Catalog.API<br/>GET /items"]
+        BA["Booking.API<br/>POST /book/{seatId}"]
+    end
+    
+    subgraph "Infrastructure"
+        MongoDB["MongoDB<br/>(CatalogDb)"]
+        Redis["Redis<br/>(Distributed Locks)"]
+        RabbitMQ["RabbitMQ<br/>(Message Broker)"]
+        SqlServer["SQL Server<br/>(TicketDb)"]
+        Seq["Seq<br/>(Logging)"]
+    end
+    
+    subgraph "Workers"
+        PW["PaymentProcessor.Worker<br/>(Consumes ticket_orders)"]
+        ORW["OutboxRelayWorker<br/>(Polls OutboxMessages)"]
+    end
+    
+    Client -->|HTTP| AG
+    AG -->|Route| CA
+    AG -->|Route| BA
+    
+    CA -->|Query| MongoDB
+    MongoDB -->|Events from CatalogSyncWorker| MongoDB
+    
+    BA -->|"1. Lock seat"| Redis
+    BA -->|"2. Publish booking"| RabbitMQ
+    
+    RabbitMQ -->|Queue: ticket_orders| PW
+    
+    PW -->|"1. Receive order"| RabbitMQ
+    PW -->|"2. Save TicketOrder"| SqlServer
+    PW -->|"3. Save OutboxMessage"| SqlServer
+    
+    ORW -->|"Poll every 5s"| SqlServer
+    ORW -->|"Publish events"| RabbitMQ
+    
+    RabbitMQ -->|Exchange: ticket_events| ORW
+    
+    CA -.->|Logs| Seq
+    BA -.->|Logs| Seq
+    PW -.->|Logs| Seq
+    ORW -.->|Logs| Seq
+    
+    style Client fill:#e1f5ff
+    style AG fill:#fff3e0
+    style CA fill:#f3e5f5
+    style BA fill:#f3e5f5
+    style PW fill:#e8f5e9
+    style ORW fill:#e8f5e9
+    style MongoDB fill:#fce4ec
+    style Redis fill:#fce4ec
+    style RabbitMQ fill:#fce4ec
+    style SqlServer fill:#fce4ec
+    style Seq fill:#fce4ec

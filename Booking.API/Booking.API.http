@@ -1,6 +1,21 @@
-@Booking.API_HostAddress = http://localhost:5094
+@hostAddress = http://localhost:4025
 
-GET {{Booking.API_HostAddress}}/weatherforecast/
+### Step 1 — Reserve a seat for an event (creates Pending booking).
+# Returns a bookingId; copy it into @bookingId below.
+# Seeded events: evt-coldplay, evt-taylor-swift, evt-tech-conf
+POST {{hostAddress}}/book/evt-coldplay/A1
 Accept: application/json
 
-###
+### Step 2 — Confirm payment (flips Pending -> Confirmed; relay then publishes).
+# Paste the bookingId returned from Step 1.
+@bookingId = daec62d3-4370-4be1-b7f7-9b3706731f81
+POST {{hostAddress}}/payments/{{bookingId}}/confirm
+Accept: application/json
+
+### Re-running the SAME seat returns 409 (seat already held).
+POST {{hostAddress}}/book/evt-coldplay/A1
+Accept: application/json
+
+### A different seat on the same event succeeds (until capacity runs out).
+POST {{hostAddress}}/book/evt-coldplay/A2
+Accept: application/json

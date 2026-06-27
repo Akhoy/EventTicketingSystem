@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "gQghfSuPh2k=",
+  "dgSpecHash": "xA3WnIy4ya4=",
   "success": true,
   "projectFilePath": "/Users/akhoy/Programming/Ticketing_System/Catalog.API/Catalog.API.csproj",
   "expectedPackageFiles": [
@@ -9,9 +9,12 @@
     "/Users/akhoy/.nuget/packages/microsoft.openapi/2.0.0/microsoft.openapi.2.0.0.nupkg.sha512",
     "/Users/akhoy/.nuget/packages/mongodb.bson/3.8.0/mongodb.bson.3.8.0.nupkg.sha512",
     "/Users/akhoy/.nuget/packages/mongodb.driver/3.8.0/mongodb.driver.3.8.0.nupkg.sha512",
+    "/Users/akhoy/.nuget/packages/pipelines.sockets.unofficial/2.2.8/pipelines.sockets.unofficial.2.2.8.nupkg.sha512",
     "/Users/akhoy/.nuget/packages/rabbitmq.client/7.2.1/rabbitmq.client.7.2.1.nupkg.sha512",
     "/Users/akhoy/.nuget/packages/sharpcompress/0.30.1/sharpcompress.0.30.1.nupkg.sha512",
     "/Users/akhoy/.nuget/packages/snappier/1.0.0/snappier.1.0.0.nupkg.sha512",
+    "/Users/akhoy/.nuget/packages/stackexchange.redis/2.12.14/stackexchange.redis.2.12.14.nupkg.sha512",
+    "/Users/akhoy/.nuget/packages/system.io.hashing/10.0.2/system.io.hashing.10.0.2.nupkg.sha512",
     "/Users/akhoy/.nuget/packages/zstdsharp.port/0.7.3/zstdsharp.port.0.7.3.nupkg.sha512"
   ],
   "logs": [

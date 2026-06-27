@@ -24,50 +24,50 @@ public class CatalogSyncWorker: BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Implementation for background task
-        // 1. Connect to RabbitMQ
         var rabbitMqConnectionString = _configuration.GetConnectionString("RabbitMQ");
         var factory = new ConnectionFactory() { Uri = new Uri(rabbitMqConnectionString!) };
         _connection = await factory.CreateConnectionAsync();
         _channel = await _connection.CreateChannelAsync();
-
-        // 2. Declare the Exchange (Just in case Catalog boots before the Payment Worker)
         await _channel.ExchangeDeclareAsync(exchange: "ticket_events", type: ExchangeType.Fanout, durable: true, cancellationToken: stoppingToken);
 
-        // 3. Create a private Queue strictly for Catalog API and bind it to the Exchange
         var queueName = "catalog_sync_queue";
         await _channel.QueueDeclareAsync(queue: queueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
         await _channel.QueueBindAsync(queue: queueName, exchange: "ticket_events", routingKey: string.Empty, cancellationToken: stoppingToken);
 
         _logger.LogInformation("🎧 Catalog API is successfully bound to the Event Bus!");
 
-        // 4. Start consuming messages - Listen for events and update MongoDB accordingly
         var consumer = new AsyncEventingBasicConsumer(_channel);
         consumer.ReceivedAsync += async (model, ea) =>
         {
-            // Handle the received message and update MongoDB
             var body = ea.Body.ToArray();
             var message = Encoding.UTF8.GetString(body);
             _logger.LogInformation("📩 Received event: {Message}", message);
-            // Here, you would deserialize the message and perform the necessary database operations to sync the catalog data.
-            // For example, if the message indicates that a ticket was purchased, you might want to decrease the available seats for that ticket in MongoDB.
-            // 6. Update the NoSQL Database
-            await UpdateMongoDatabaseAsync();          
-            // 7. Tell RabbitMQ the message was processed successfully
-            await _channel.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false, cancellationToken: stoppingToken);  
+
+            // Parse the EventId so we decrement the right event, not a blind "first document".
+            var bookingEvent = JsonSerializer.Deserialize<BookingEvent>(message);
+            if (bookingEvent is not null && !string.IsNullOrEmpty(bookingEvent.EventId))
+                await UpdateMongoDatabaseAsync(bookingEvent.EventId);
+            else
+                _logger.LogWarning("⚠️ Event message had no EventId, skipping: {Message}", message);
+
+            await _channel.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
         };
 
         await _channel.BasicConsumeAsync(queue: queueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
-        
-        // Keep the background service alive forever
         await Task.Delay(Timeout.Infinite, stoppingToken);
     }
 
-    private async Task UpdateMongoDatabaseAsync()
+    private async Task UpdateMongoDatabaseAsync(string eventId)
     {
         using var scope = _serviceScopeFactory.CreateScope();
         var catalogRepository = scope.ServiceProvider.GetRequiredService<ICatalogRepository>();
-        await catalogRepository.DecrementAvailableSeatsAsync();
-        _logger.LogInformation("✅ MongoDB has been updated based on the received event!");        
+        await catalogRepository.DecrementAvailableSeatsAsync(eventId);
+        _logger.LogInformation("✅ MongoDB has been updated based on the received event!");
     }
 }
+
+// DTO (Data Transfer Object) — the message contract consumed from the "ticket_events" fanout.
+// This is the consumer's copy of the shape Booking.API publishes; it carries only the wire
+// fields, not Catalog's own CatalogItem entity. Kept in sync by hand with Booking.API's copy:
+// if a field is renamed there, rename it here too or deserialization binds it to null.
+public record BookingEvent(string EventId, string SeatId, string UserId);

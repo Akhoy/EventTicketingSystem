@@ -1,6 +1,6 @@
-@Catalog.API_HostAddress = http://localhost:5170
+@hostAddress = http://localhost:4024
 
-GET {{Catalog.API_HostAddress}}/weatherforecast/
+### List all catalog items (EventId, EventName, Price, AvailableSeats).
+# Use this to watch AvailableSeats drop after a booking is confirmed and synced.
+GET {{hostAddress}}/items
 Accept: application/json
-
-###

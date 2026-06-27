@@ -1,0 +1,39 @@
+services:
+  api-gateway:
+    build:
+      context: ./ApiGateway
+      dockerfile: Dockerfile.debug
+    ports:
+      - "5050:8080"
+      - "4023:4023"
+
+  catalog-api:
+    build:
+      context: ./Catalog.API
+      dockerfile: Dockerfile.debug
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      # Bind Kestrel to the mapped port. Without this the app listens on the image
+      # default (8080), nothing answers on 4024, and Docker resets the connection (ECONNRESET).
+      - ASPNETCORE_URLS=http://+:4024
+      - ConnectionStrings__MongoDb=mongodb://mongo:27017
+      - ConnectionStrings__RabbitMQ=amqp://guest:guest@rabbitmq:5672
+      - ConnectionStrings__Redis=redis:6379,abortConnect=false
+    ports:
+      - "4024:4024"
+
+
+  booking-api:
+    build:
+      context: ./Booking.API
+      dockerfile: Dockerfile.debug
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      # Bind Kestrel to the mapped port (else it defaults to 8080 → ECONNRESET on 4025).
+      - ASPNETCORE_URLS=http://+:4025
+      - ConnectionStrings__Redis=redis:6379
+      - ConnectionStrings__RabbitMQ=amqp://guest:guest@rabbitmq:5672
+      - ConnectionStrings__SqlServer=Server=sql-server;Database=BookingDb;User Id=sa;Password=SuperSecretPassword123!;TrustServerCertificate=True;
+      - SeqUrl=http://seq:5341
+    ports:
+      - "4025:4025"

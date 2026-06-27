@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach to PaymentWorker (Docker)",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "1",
+      "justMyCode": true,
+      "debugServer": 4022
+    },
+    {
+      "name": "Attach to ApiGateway (Docker)",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "1",
+      "justMyCode": true,
+      "debugServer": 4023
+    },
+    {
+      "name": "Attach to Catalog.API (Docker)",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "1",
+      "justMyCode": true,
+      "debugServer": 4024
+    },
+    {
+      "name": "Attach to Booking.API (Docker)",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "1",
+      "justMyCode": true,
+      "debugServer": 4025
+    },
+    {
+            "name": ".NET Core Docker Attach",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickRemoteProcess}",
+            "sourceFileMap": {
+                "/src": "${workspaceFolder}/Booking.API"
+            },
+            "pipeTransport": {
+                "pipeProgram": "docker",
+                "pipeArgs": [ "exec", "-i", "ticketing_system-booking-api-1" ],
+                "debuggerPath": "/publish/vsdbg/vsdbg",
+                "pipeCwd": "${workspaceRoot}",
+                "quoteArgs": false
+            }
+    }
+  ]
+}

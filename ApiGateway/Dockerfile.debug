@@ -1,0 +1,16 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY ["ApiGateway.csproj", "./"]
+RUN dotnet restore "ApiGateway.csproj"
+COPY . .
+RUN dotnet publish "ApiGateway.csproj" -c Debug -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+COPY --from=build /app/publish .
+RUN apt-get update 
+RUN apt-get install -y --no-install-recommends apt-utils 
+RUN apt-get install -y curl unzip procps
+RUN curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l /publish/vsdbg;
+EXPOSE 4023
+ENTRYPOINT ["dotnet", "ApiGateway.dll"]

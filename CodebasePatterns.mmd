@@ -1,0 +1,61 @@
+graph LR
+    subgraph DI["🔧 Dependency Injection (Program.cs)"]
+        CASetup["Catalog.API Setup<br/>- AddSingleton: IMongoDatabase<br/>- AddScoped: ICatalogRepository<br/>- AddHostedService: CatalogSyncWorker"]
+        BASetup["Booking.API Setup<br/>- AddSingleton: IConnectionMultiplexer<br/>  Redis Config<br/>- CreateChannelAsync: RabbitMQ<br/>- QueueDeclareAsync: ticket_orders"]
+        PWSetup["PaymentProcessor Setup<br/>- AddDbContext: TicketDbContext<br/>  SQL Server<br/>- AddScoped: IServiceScopeFactory<br/>- AddHostedService: Worker<br/>- AddHostedService: OutboxRelayWorker"]
+    end
+    
+    subgraph Repo["📚 Repository Pattern"]
+        ICR["Interface<br/>ICatalogRepository<br/>─────────<br/>+ GetCountAsync()<br/>+ GetAllAsync()<br/>+ SeedDataAsync()<br/>+ DecrementAvailableSeatsAsync()"]
+        
+        CR["Implementation<br/>CatalogRepository<br/>─────────<br/>constructor(IMongoDatabase)<br/>_ticketsCollection<br/>─────────<br/>Delegates to MongoDB"]
+    end
+    
+    subgraph Models["📊 Entity Models"]
+        CI["CatalogItem<br/>─────────<br/>Id: string (MongoDB)<br/>EventName: string<br/>Price: decimal<br/>AvailableSeats: int"]
+        
+        TO["TicketOrder<br/>─────────<br/>Id: Guid<br/>SeatId: string<br/>UserId: string<br/>ProcessedAt: DateTime<br/>Status: string"]
+        
+        OM["OutboxMessage<br/>─────────<br/>Id: Guid<br/>EventType: string<br/>Payload: string<br/>CreatedOnUtc: DateTime<br/>ProcessedOnUtc: DateTime?"]
+    end
+    
+    subgraph DB["🗄️ DbContext & Persistence"]
+        TDC["TicketDbContext<br/>(Entity Framework)<br/>─────────<br/>DbSet: TicketOrders<br/>DbSet: OutboxMessages<br/>─────────<br/>Target: SQL Server"]
+        
+        MDB["MongoDB Client<br/>─────────<br/>Database: CatalogDb<br/>Collection: Tickets<br/>─────────<br/>Documents: CatalogItem"]
+    end
+    
+    CASetup --> ICR
+    ICR --> CR
+    CR --> MDB
+    
+    BASetup -->|Uses| BA["Booking.API<br/>Endpoint Handler<br/>app.MapPost"]
+    
+    PWSetup --> PW["Worker Service<br/>(Consumes Queue)"]
+    PWSetup --> ORW["OutboxRelayWorker<br/>(Polls DB)"]
+    
+    CR -.->|Works with| CI
+    TDC -.->|Maps| TO
+    TDC -.->|Maps| OM
+    
+    PW -->|Saves| TDC
+    ORW -->|Reads| TDC
+    
+    style DI fill:#2d2d2d,stroke:#64b5f6,stroke-width:2px,color:#fff
+    style Repo fill:#3d2e2e,stroke:#ef9a9a,stroke-width:2px,color:#fff
+    style Models fill:#3d2e2e,stroke:#ef9a9a,stroke-width:2px,color:#fff
+    style DB fill:#2d3d2d,stroke:#81c784,stroke-width:2px,color:#fff
+    
+    style CASetup fill:#1e5e1e,stroke:#66bb6a,color:#fff
+    style BASetup fill:#1e5e1e,stroke:#66bb6a,color:#fff
+    style PWSetup fill:#1e5e1e,stroke:#66bb6a,color:#fff
+    style ICR fill:#3d3d3d,stroke:#64b5f6,color:#fff
+    style CR fill:#3d3d3d,stroke:#64b5f6,color:#fff
+    style CI fill:#3d2e2e,stroke:#ef9a9a,color:#fff
+    style TO fill:#3d2e2e,stroke:#ef9a9a,color:#fff
+    style OM fill:#3d2e2e,stroke:#ef9a9a,color:#fff
+    style TDC fill:#2d3d2d,stroke:#81c784,color:#fff
+    style MDB fill:#2d3d2d,stroke:#81c784,color:#fff
+    style BA fill:#1e5e1e,stroke:#66bb6a,color:#fff
+    style PW fill:#1e5e1e,stroke:#66bb6a,color:#fff
+    style ORW fill:#1e5e1e,stroke:#66bb6a,color:#fff

@@ -1,0 +1,106 @@
+graph LR
+    subgraph Client["🌐 Client"]
+        User["Client\n(App)"]
+    end
+
+    subgraph Gateway["🚪 API Gateway"]
+        AG["ApiGateway\n(YARP)"]
+    end
+
+    subgraph APIs["📦 API Services"]
+        CA["Catalog.API"]
+        BA["Booking.API"]
+    end
+
+    subgraph Repo["📚 Catalog Repository"]
+        ICR["ICatalogRepository"]
+        CR["CatalogRepository"]
+    end
+
+    subgraph Workers["⚙️ Background Workers"]
+        PW["PaymentProcessor.Worker"]
+        ORW["OutboxRelayWorker"]
+        CS["CatalogSyncWorker"]
+    end
+
+    subgraph Storage["🏗️ Infrastructure"]
+        MongoDB["MongoDB"]
+        Redis["Redis"]
+        RabbitMQ["RabbitMQ"]
+        SqlServer["SQL Server"]
+    end
+
+    subgraph Models["📋 Data Models"]
+        CI["CatalogItem"]
+        TO["TicketOrder"]
+        OM["OutboxMessage"]
+    end
+
+    Seq["Seq\nLogging"]
+    Downstream["Downstream Services\n(not shown)"]
+    Summary["Summary:
+• Gateway routes calls to Catalog.API or Booking.API.
+• Booking.API locks seats and emits booking events to queue ticket_orders.
+• PaymentProcessor.Worker consumes ticket_orders, writes TicketOrder + OutboxMessage to SQL Server.
+• OutboxRelayWorker polls unprocessed OutboxMessage rows and publishes events to exchange ticket_events.
+• Catalog.API’s CatalogSyncWorker binds a queue to ticket_events and consumes the integration event.
+• After publish, downstream subscribers can also consume the event."]
+
+    User -->|HTTP request| AG
+    AG -->|routes to| CA
+    AG -->|routes to| BA
+
+    CA -->|calls repository| ICR
+    ICR -->|implements| CR
+    CR -->|reads| MongoDB
+
+    BA -->|locks seat| Redis
+    BA -->|publishes booking event to queue ticket_orders| RabbitMQ
+
+    RabbitMQ -->|ticket_orders consumed by| PW
+    PW -->|writes TicketOrder + OutboxMessage| SqlServer
+    PW -->|creates| TO
+    PW -->|creates| OM
+
+    ORW -->|polls unprocessed OutboxMessage rows| SqlServer
+    ORW -->|publishes integration event to exchange ticket_events| RabbitMQ
+    RabbitMQ -->|ticket_events consumed by| CS
+    CS -->|updates catalog view| MongoDB
+    RabbitMQ -.->|fanout event to subscribers| Downstream
+
+    CA -.->|logs| Seq
+    BA -.->|logs| Seq
+    PW -.->|logs| Seq
+    ORW -.->|logs| Seq
+
+    Summary -.-> AG
+    Summary -.-> BA
+    Summary -.-> PW
+    Summary -.-> ORW
+    Summary -.-> CA
+    Summary -.-> MongoDB
+    Summary -.-> SqlServer
+
+    style Client fill:#111827,stroke:#4f46e5,stroke-width:2px,color:#f8fafc
+    style Gateway fill:#111827,stroke:#f97316,stroke-width:2px,color:#f8fafc
+    style APIs fill:#111827,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    style Repo fill:#111827,stroke:#60a5fa,stroke-width:2px,color:#f8fafc
+    style Workers fill:#111827,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    style Storage fill:#111827,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    style Models fill:#111827,stroke:#fca5a5,stroke-width:2px,color:#f8fafc
+    style Seq fill:#111827,stroke:#facc15,stroke-width:2px,color:#111827,fill:#fef9c3
+    style Summary fill:#0f172a,stroke:#06b6d4,stroke-width:2px,color:#f8fafc,fill:#0f172a
+    style Downstream fill:#111827,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc,fill:#1f2937
+    style MongoDB fill:#111827,stroke:#a78bfa,color:#f8fafc
+    style Redis fill:#111827,stroke:#f97316,color:#f8fafc
+    style RabbitMQ fill:#111827,stroke:#f472b6,color:#f8fafc
+    style SqlServer fill:#111827,stroke:#34d399,color:#f8fafc
+    style CA fill:#111827,stroke:#22c55e,color:#f8fafc
+    style BA fill:#111827,stroke:#22c55e,color:#f8fafc
+    style ICR fill:#111827,stroke:#60a5fa,color:#f8fafc
+    style CR fill:#111827,stroke:#60a5fa,color:#f8fafc
+    style PW fill:#111827,stroke:#34d399,color:#f8fafc
+    style ORW fill:#111827,stroke:#34d399,color:#f8fafc
+    style CS fill:#111827,stroke:#34d399,color:#f8fafc
+    style AG fill:#111827,stroke:#f97316,color:#f8fafc
+

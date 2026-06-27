@@ -1,0 +1,101 @@
+graph TB
+    subgraph Client["🌐 Client Layer"]
+        User["Client Application<br/>(HTTP Requests)"]
+    end
+    
+    subgraph Gateway["🚪 API Gateway"]
+        AG["ApiGateway<br/>(YARP Reverse Proxy)<br/>Port 5050"]
+    end
+    
+    subgraph Services["📦 Microservices"]
+        subgraph Catalog["Catalog Service"]
+            CA["Catalog.API<br/>GET /items"]
+            ICR["ICatalogRepository<br/>(Interface)"]
+            CR["CatalogRepository<br/>(MongoDB Implementation)"]
+            CS["CatalogSyncWorker<br/>(Background Service)"]
+        end
+        
+        subgraph Booking["Booking Service"]
+            BA["Booking.API<br/>POST /book/{seatId}"]
+            BConfig["Booking Config<br/>Redis + RabbitMQ<br/>DI Setup"]
+        end
+    end
+    
+    subgraph Models["📋 Domain Models"]
+        CI["CatalogItem<br/>EventName, Price<br/>AvailableSeats"]
+        TO["TicketOrder<br/>Id, SeatId<br/>UserId, ProcessedAt<br/>Status"]
+        OM["OutboxMessage<br/>Id, EventType<br/>Payload, CreatedOnUtc<br/>ProcessedOnUtc"]
+    end
+    
+    subgraph Workers["⚙️ Background Workers"]
+        PW["PaymentProcessor.Worker<br/>(RabbitMQ Consumer)"]
+        ORW["OutboxRelayWorker<br/>(Outbox Poller 5s)"]
+    end
+    
+    subgraph DBContext["💾 Database Context"]
+        TDC["TicketDbContext<br/>(Entity Framework)<br/>TicketOrders<br/>OutboxMessages"]
+    end
+    
+    subgraph Infra["🏗️ Infrastructure"]
+        MongoDB["MongoDB<br/>CatalogDb<br/>Tickets Collection"]
+        Redis["Redis<br/>Distributed Locks<br/>seat:lock:{seatId}"]
+        RabbitMQ["RabbitMQ<br/>Queue: ticket_orders<br/>Exchange: ticket_events"]
+        SqlServer["SQL Server<br/>TicketDb<br/>2 Tables"]
+        Seq["Seq<br/>Centralized Logging<br/>Port 8081"]
+    end
+    
+    User -->|HTTP| AG
+    AG -->|Route| CA
+    AG -->|Route| BA
+    
+    CA --> ICR
+    ICR --> CR
+    CR --> MongoDB
+    CS --> MongoDB
+    
+    BA --> BConfig
+    BA -->|Lock seat| Redis
+    BA -->|Publish| RabbitMQ
+    
+    RabbitMQ -->|Consume| PW
+    PW --> TDC
+    TDC --> SqlServer
+    
+    ORW --> TDC
+    ORW -->|Publish events| RabbitMQ
+    
+    PW -.->|Logs| Seq
+    BA -.->|Logs| Seq
+    CA -.->|Logs| Seq
+    ORW -.->|Logs| Seq
+    
+    TDC -.->|Models| TO
+    TDC -.->|Models| OM
+    CR -.->|Model| CI
+    
+    style Client fill:#2d2d2d,stroke:#4a9eff,stroke-width:2px,color:#fff
+    style Gateway fill:#3d3d3d,stroke:#ff9500,stroke-width:2px,color:#fff
+    style Catalog fill:#1e3a1e,stroke:#66bb6a,stroke-width:2px,color:#fff
+    style Booking fill:#1e3a1e,stroke:#66bb6a,stroke-width:2px,color:#fff
+    style Services fill:#2d2d2d,stroke:#90caf9,stroke-width:2px,color:#fff
+    style Models fill:#3d2e2e,stroke:#ef9a9a,stroke-width:2px,color:#fff
+    style Workers fill:#2e3a2e,stroke:#81c784,stroke-width:2px,color:#fff
+    style DBContext fill:#3d3d3d,stroke:#64b5f6,stroke-width:2px,color:#fff
+    style Infra fill:#2d2d2d,stroke:#ba68c8,stroke-width:2px,color:#fff
+    
+    style CA fill:#2e5e2e,stroke:#81c784,color:#fff
+    style BA fill:#2e5e2e,stroke:#81c784,color:#fff
+    style ICR fill:#3d3d3d,stroke:#64b5f6,color:#fff
+    style CR fill:#3d3d3d,stroke:#64b5f6,color:#fff
+    style CS fill:#2e5e2e,stroke:#81c784,color:#fff
+    style BConfig fill:#3d3d3d,stroke:#64b5f6,color:#fff
+    style PW fill:#2e5e2e,stroke:#81c784,color:#fff
+    style ORW fill:#2e5e2e,stroke:#81c784,color:#fff
+    style TDC fill:#3d3d3d,stroke:#64b5f6,color:#fff
+    style AG fill:#3d3d3d,stroke:#ff9500,color:#fff
+    
+    style MongoDB fill:#2d3d2d,stroke:#ba68c8,color:#fff
+    style Redis fill:#2d3d2d,stroke:#ba68c8,color:#fff
+    style RabbitMQ fill:#2d3d2d,stroke:#ba68c8,color:#fff
+    style SqlServer fill:#2d3d2d,stroke:#ba68c8,color:#fff
+    style Seq fill:#2d3d2d,stroke:#ba68c8,color:#fff

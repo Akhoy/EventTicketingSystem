@@ -72,15 +72,7 @@ app.MapPost("/book/{eventId}/{seatId}", async (string eventId, string seatId, IC
         return Results.Conflict(new { message = $"Event {eventId} is sold out." });
     }
 
-    var booking = new Booking.API.Booking
-    {
-        Id = Guid.NewGuid(),
-        EventId = eventId,
-        SeatId = seatId,
-        UserId = userId,
-        Status = "Pending",
-        CreatedAt = DateTime.UtcNow
-    };
+    var booking = Booking.API.Booking.Create(eventId, seatId, userId);
 
     try
     {
@@ -109,13 +101,17 @@ app.MapPost("/payments/{bookingId}/confirm", async (Guid bookingId, BookingDbCon
     var booking = await db.Bookings.FindAsync(bookingId);
     if (booking is null)
         return Results.NotFound(new { message = "Booking not found." });
-    if (booking.Status != "Pending")
-        return Results.Conflict(new { message = $"Booking is already {booking.Status}." });
-
-    using var transaction = await db.Database.BeginTransactionAsync();
-    booking.Status = "Confirmed";
-    await db.SaveChangesAsync();
-    await transaction.CommitAsync();
+    try
+    {
+        using var transaction = await db.Database.BeginTransactionAsync();
+        booking.Confirm();
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new { message = ex.Message });
+    }
 
     logger.LogInformation("Payment confirmed — Seat: {SeatId}, BookingId: {BookingId}", booking.SeatId, bookingId);
     return Results.Ok(new { message = "Payment confirmed. Your booking is being processed." });

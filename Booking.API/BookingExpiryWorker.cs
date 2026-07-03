@@ -47,7 +47,7 @@ public class BookingExpiryWorker : BackgroundService
                     await cache.StringIncrementAsync($"event:{booking.EventId}:seats");
                     await cache.KeyDeleteAsync($"seat:lock:{booking.EventId}:{booking.SeatId}");
 
-                    booking.Status = "Expired";
+                    booking.Expire();
                     _logger.LogInformation("Expired abandoned booking — Event: {EventId}, Seat: {SeatId}, BookingId: {BookingId}",
                         booking.EventId, booking.SeatId, booking.Id);
                 }

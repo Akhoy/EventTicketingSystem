@@ -65,7 +65,7 @@ public class OutboxRelayWorker : BackgroundService
                             cancellationToken: stoppingToken);
 
                         // Mark published so the next poll cycle skips this booking.
-                        booking.PublishedAt = DateTime.UtcNow;
+                        booking.MarkPublished();
                         _logger.LogInformation("Relayed booking to ticket_events — Seat: {SeatId}, User: {UserId}", booking.SeatId, booking.UserId);
                     }
 

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>System Design Concepts — Interview Reference</title>
+<style>
+  :root {
+    --blue:   #1a56db;
+    --green:  #057a55;
+    --red:    #c81e1e;
+    --orange: #b45309;
+    --purple: #6c2bd9;
+    --grey:   #374151;
+    --light:  #f9fafb;
+    --border: #e5e7eb;
+    --code-bg:#1e1e2e;
+    --code-fg:#cdd6f4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.75;
+    color: #111827;
+    background: #fff;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+  }
+  .cover { border-bottom: 3px solid var(--blue); padding-bottom: 40px; margin-bottom: 48px; }
+  .cover h1 { font-size: 32px; font-weight: 800; color: var(--blue); }
+  .cover .subtitle { font-size: 16px; color: #6b7280; margin-top: 6px; }
+  h2 { font-size: 22px; font-weight: 700; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 16px; font-weight: 700; color: var(--blue); margin: 28px 0 10px; }
+  h4 { font-size: 14px; font-weight: 700; color: #374151; margin: 18px 0 6px; }
+  p { margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 5px; }
+  pre {
+    background: var(--code-bg); color: var(--code-fg);
+    border-radius: 8px; padding: 16px 20px;
+    font-family: "JetBrains Mono", monospace; font-size: 12.5px;
+    line-height: 1.6; margin: 12px 0 18px; overflow-x: auto;
+  }
+  code {
+    background: #f3f4f6; border-radius: 4px; padding: 1px 6px;
+    font-family: "JetBrains Mono", monospace; font-size: 12.5px; color: #be185d;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13px; }
+  th { background: #f3f4f6; font-weight: 700; text-align: left; padding: 10px 14px; border: 1px solid var(--border); }
+  td { padding: 9px 14px; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .why { background: #eff6ff; border-left: 4px solid var(--blue); border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 14px 0; }
+  .why strong { color: var(--blue); display: block; margin-bottom: 4px; }
+  .good { background: #f0fdf4; border-left: 4px solid var(--green); border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 14px 0; }
+  .good strong { color: var(--green); display: block; margin-bottom: 4px; }
+  .warn { background: #fff7ed; border-left: 4px solid var(--orange); border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 14px 0; }
+  .warn strong { color: var(--orange); display: block; margin-bottom: 4px; }
+  .interview { background: #f5f3ff; border-left: 4px solid var(--purple); border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 14px 0; }
+  .interview strong { color: var(--purple); display: block; margin-bottom: 4px; }
+  .toc { background: var(--light); border: 1px solid var(--border); border-radius: 10px; padding: 24px 28px; margin-bottom: 48px; }
+  .toc h2 { margin-top: 0; border: none; font-size: 16px; }
+  .toc a { color: var(--blue); text-decoration: none; font-weight: 500; }
+  .concept-card { border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; }
+  .tag { font-size: 11px; font-weight: 700; border-radius: 4px; padding: 2px 8px; text-transform: uppercase; }
+  .tag-cap { background: #fef3c7; color: #92400e; }
+  .tag-acid { background: #dbeafe; color: #1e40af; }
+  .tag-ddd { background: #ede9fe; color: #5b21b6; }
+  .tag-redis { background: #fce7f3; color: #9d174d; }
+  @media print {
+    body { max-width: 100%; padding: 20px; font-size: 13px; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    .concept-card { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>System Design Concepts</h1>
+  <div class="subtitle">Interview Reference — Everything Covered in Study Sessions</div>
+</div>
+
+<div class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#cap">CAP Theorem</a></li>
+    <li><a href="#acid">ACID</a></li>
+    <li><a href="#base">BASE</a></li>
+    <li><a href="#isolation">Isolation Levels — Dirty, Non-Repeatable, Phantom Reads</a></li>
+    <li><a href="#consistency">Consistency Models</a></li>
+    <li><a href="#redis">Redis Atomicity &amp; Distributed Counter</a></li>
+    <li><a href="#ddd">Domain-Driven Design (DDD)</a></li>
+  </ol>
+</div>
+
+<!-- ══════════════════════════════ 1. CAP ══════════════════════════════ -->
+<h2 id="cap">1. CAP Theorem</h2>
+
+<p>Any distributed system can only guarantee <strong>two of three</strong> properties simultaneously:</p>
+
+<table>
+  <thead><tr><th>Letter</th><th>Property</th><th>Plain English</th></tr></thead>
+  <tbody>
+    <tr><td><strong>C</strong></td><td>Consistency</td><td>Every read returns the most recent write. No stale data.</td></tr>
+    <tr><td><strong>A</strong></td><td>Availability</td><td>Every request gets a response. System never refuses.</td></tr>
+    <tr><td><strong>P</strong></td><td>Partition Tolerance</td><td>System keeps working even when nodes can't talk to each other.</td></tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>P is not optional.</strong> Networks fail in every real distributed system. So the real choice is always CP or AP — never CA.
+</div>
+
+<h3>CP — Consistency + Partition Tolerance</h3>
+<p>When a partition occurs, the system rejects requests rather than risk returning stale or inconsistent data. Availability is sacrificed.</p>
+<p><strong>Your example:</strong> Redis seat counter. If Redis is unreachable, <code>/book</code> returns an error. Better to be down than to oversell a seat.</p>
+
+<h3>AP — Availability + Partition Tolerance</h3>
+<p>When a partition occurs, the system keeps responding — possibly with stale data. Consistency is sacrificed.</p>
+<p><strong>Your example:</strong> MongoDB AvailableSeats. CatalogSyncWorker may be behind. <code>GET /items</code> still responds with last known values. A slightly wrong seat count on the browse page is acceptable.</p>
+
+<h3>Your system's CAP trade-offs</h3>
+<table>
+  <thead><tr><th>Component</th><th>Choice</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Redis (seat counter)</td><td><strong>CP</strong></td><td>Overselling is unrecoverable. Downtime is recoverable.</td></tr>
+    <tr><td>MongoDB (catalogue)</td><td><strong>AP</strong></td><td>Stale seat count on browse page is acceptable. Unavailability is not.</td></tr>
+    <tr><td>SQL Server (bookings)</td><td><strong>CP</strong></td><td>ACID. Source of financial truth.</td></tr>
+    <tr><td>RabbitMQ + Outbox</td><td><strong>AP</strong></td><td>Messages delayed if broker down, never lost. Eventual consistency.</td></tr>
+  </tbody>
+</table>
+
+<div class="interview">
+  <strong>Interview answer:</strong> "I made different CAP trade-offs per data store based on the cost of being wrong. Redis and SQL are CP — overselling a seat is unrecoverable so consistency wins. MongoDB is AP — a slightly stale seat count on a browse page is a business-acceptable trade-off. Availability wins there."
+</div>
+
+<!-- ══════════════════════════════ 2. ACID ══════════════════════════════ -->
+<h2 id="acid">2. ACID</h2>
+
+<p>ACID is a set of four guarantees a database makes about transactions. A transaction is a group of operations that must all succeed or all fail together.</p>
+
+<div class="concept-card">
+  <h3 style="margin-top:0">A — Atomicity</h3>
+  <p>All or nothing. Every operation in a transaction either fully commits or fully rolls back. No half-written state ever exists.</p>
+  <p><strong>Your example:</strong></p>
+  <pre><code>using var transaction = await db.Database.BeginTransactionAsync();
+booking.Confirm();
+await db.SaveChangesAsync();
+await transaction.CommitAsync(); // if this fails, nothing was written</code></pre>
+  <p>If <code>SaveChangesAsync</code> throws, the booking stays Pending. You never get a half-confirmed booking.</p>
+  <p><strong>Real world:</strong> Bank transfer — debit Account A, credit Account B. If the server crashes between them, atomicity guarantees the debit is rolled back. Nobody loses money.</p>
+</div>
+
+<div class="concept-card">
+  <h3 style="margin-top:0">C — Consistency</h3>
+  <p>The database moves from one valid state to another. Rules and constraints always hold.</p>
+  <div class="warn">
+    <strong>This C is different from CAP's C.</strong> ACID consistency = data follows defined rules (constraints, foreign keys). CAP consistency = every read sees the latest write across distributed nodes. Same letter, completely different meaning.
+  </div>
+</div>
+
+<div class="concept-card">
+  <h3 style="margin-top:0">I — Isolation</h3>
+  <p>Concurrent transactions don't see each other's intermediate state. Controlled by isolation levels (see section 4).</p>
+  <p><strong>Your example:</strong> Two users confirming bookings simultaneously. Transaction 1's half-written state is invisible to Transaction 2.</p>
+</div>
+
+<div class="concept-card">
+  <h3 style="margin-top:0">D — Durability</h3>
+  <p>Once committed, data survives a crash. Written to disk, not just memory.</p>
+  <p><strong>SQL Server vs Redis:</strong> SQL Server writes to a transaction log on disk before confirming a commit. Redis keeps data in memory by default — a restart wipes it. That's why your seat counters need to be repopulated from MongoDB on Redis restart, but your booking records survive SQL Server restarts unchanged.</p>
+</div>
+
+<!-- ══════════════════════════════ 3. BASE ══════════════════════════════ -->
+<h2 id="base">3. BASE</h2>
+
+<p>BASE is the opposite philosophy to ACID. NoSQL databases like MongoDB adopt it.</p>
+
+<table>
+  <thead><tr><th>Letter</th><th>Property</th><th>Plain English</th></tr></thead>
+  <tbody>
+    <tr><td><strong>B</strong></td><td>Basically Available</td><td>System responds most of the time, even if data is stale or partial</td></tr>
+    <tr><td><strong>S</strong></td><td>Soft State</td><td>State can change over time without a direct write — as sync catches up</td></tr>
+    <tr><td><strong>E</strong></td><td>Eventually Consistent</td><td>Given enough time, all nodes converge to the same value</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Your example:</strong> MongoDB <code>AvailableSeats</code>. After a booking is confirmed, CatalogSyncWorker asynchronously decrements the MongoDB count. For 10-30 seconds, MongoDB might show "2000 seats" when Redis says "1995". That's soft state — it's changing without a direct write, as the worker catches up. Eventually both agree. That's BASE.</p>
+
+<div class="interview">
+  <strong>Interview answer:</strong> "My MongoDB catalogue is BASE. AvailableSeats is eventually consistent — it lags behind Redis by however long CatalogSyncWorker takes to process the message. That's acceptable because it's a display value. The booking gate is Redis, which is strongly consistent. I use ACID where money is involved, BASE where approximate data is acceptable."
+</div>
+
+<!-- ══════════════════════════════ 4. ISOLATION ══════════════════════════════ -->
+<h2 id="isolation">4. Isolation Levels</h2>
+
+<p>Isolation levels control how much concurrent transactions can "see" each other. Higher isolation = more protection, less concurrency, lower throughput.</p>
+
+<h3>The Three Problems</h3>
+
+<div class="concept-card">
+  <h4>Dirty Read</h4>
+  <p>You read data another transaction has written but <strong>not yet committed</strong>. That transaction might roll back — meaning you read data that never officially existed.</p>
+  <pre><code>Transaction 1: UPDATE booking SET status = 'Confirmed'  -- not committed yet
+Transaction 2: SELECT status FROM booking → 'Confirmed'  -- dirty read
+Transaction 1: ROLLBACK                                   -- never happened
+-- Transaction 2 acted on data that never existed</code></pre>
+  <p><strong>Your system impact:</strong> OutboxRelayWorker could publish a booking to RabbitMQ, then the HTTP handler rolls back. Catalog.API decrements seats for a booking that never existed.</p>
+</div>
+
+<div class="concept-card">
+  <h4>Non-Repeatable Read</h4>
+  <p>You read the same row twice in one transaction and get <strong>different values</strong> because another transaction updated it in between.</p>
+  <pre><code>Transaction 1: SELECT status → 'Pending'
+Transaction 2: UPDATE status = 'Confirmed' → COMMIT
+Transaction 1: SELECT status → 'Confirmed'  -- different value, same transaction</code></pre>
+  <p>Same transaction. Same row. Different value. Your logic is now inconsistent with itself.</p>
+</div>
+
+<div class="concept-card">
+  <h4>Phantom Read</h4>
+  <p>You query a set of rows twice in one transaction and get <strong>different rows</strong> because another transaction inserted or deleted rows in between.</p>
+  <pre><code>Transaction 1: SELECT COUNT(*) FROM Bookings WHERE EventId = 'evt-coldplay' → 150
+Transaction 2: INSERT INTO Bookings (EventId...) VALUES ('evt-coldplay') → COMMIT
+Transaction 1: SELECT COUNT(*) FROM Bookings WHERE EventId = 'evt-coldplay' → 151</code></pre>
+  <p>A new row "appeared" — a phantom. Same query, different result set.</p>
+  <p><strong>Difference from non-repeatable read:</strong> Non-repeatable = same row, value changed. Phantom = same query, different rows returned.</p>
+</div>
+
+<h3>Isolation Levels — What They Prevent</h3>
+
+<table>
+  <thead><tr><th>Level</th><th>Dirty Read</th><th>Non-Repeatable Read</th><th>Phantom Read</th><th>Cost</th></tr></thead>
+  <tbody>
+    <tr><td>Read Uncommitted</td><td>❌ Not prevented</td><td>❌</td><td>❌</td><td>Maximum concurrency</td></tr>
+    <tr><td><strong>Read Committed</strong></td><td>✅ Prevented</td><td>❌</td><td>❌</td><td>Low — SQL Server default</td></tr>
+    <tr><td>Repeatable Read</td><td>✅</td><td>✅ Prevented</td><td>❌</td><td>Medium — locks rows you read</td></tr>
+    <tr><td>Serializable</td><td>✅</td><td>✅</td><td>✅ Prevented</td><td>Maximum — kills throughput</td></tr>
+  </tbody>
+</table>
+
+<div class="interview">
+  <strong>Why SQL Server defaults to Read Committed:</strong> "It prevents dirty reads — the most dangerous problem — without the throughput cost of Serializable. Serializable locks every transaction so only one runs at a time. Under 50,000 concurrent users that means everything queues behind locks. Read Committed is the pragmatic middle ground."
+</div>
+
+<!-- ══════════════════════════════ 5. CONSISTENCY MODELS ══════════════════════════════ -->
+<h2 id="consistency">5. Consistency Models</h2>
+
+<p>Between "always right" and "eventually right" there is a spectrum. Different parts of your system sit at different points on it.</p>
+
+<table>
+  <thead><tr><th>Model</th><th>Meaning</th><th>Your example</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Strong Consistency</strong></td>
+      <td>Every read returns the latest write. Always. No exceptions.</td>
+      <td>Redis DECR — after it executes, every read of that key sees the decremented value immediately</td>
+    </tr>
+    <tr>
+      <td><strong>Read-Your-Writes</strong></td>
+      <td>You always see your own writes immediately. Others might not yet.</td>
+      <td>After confirming a booking, you see "Confirmed" immediately. Another user querying might briefly see "Pending"</td>
+    </tr>
+    <tr>
+      <td><strong>Causal Consistency</strong></td>
+      <td>Causally related operations are seen in the correct order by everyone.</td>
+      <td>RabbitMQ — messages within a queue are consumed in order. The cause always appears before the effect.</td>
+    </tr>
+    <tr>
+      <td><strong>Eventual Consistency</strong></td>
+      <td>Will converge to the correct value. Timing not guaranteed.</td>
+      <td>MongoDB AvailableSeats — lags behind Redis by seconds. DNS propagation — lags by up to 48 hours.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ══════════════════════════════ 6. REDIS ══════════════════════════════ -->
+<h2 id="redis">6. Redis Atomicity &amp; Distributed Counter</h2>
+
+<h3>What is a Distributed Counter?</h3>
+<p>A counter that must be accurate across multiple processes running simultaneously. If Booking.API runs as 3 pods, all three pods need to decrement the same count. The counter must live somewhere shared — not in any pod's memory.</p>
+
+<pre><code>Pod 1 → Redis DECR event:evt-coldplay:seats
+Pod 2 → Redis DECR event:evt-coldplay:seats  // same key, different pod
+Pod 3 → Redis DECR event:evt-coldplay:seats  // all three hit the same Redis key</code></pre>
+
+<h3>What is Interleaving?</h3>
+<p>In a multi-threaded system, the CPU can switch between threads mid-operation. Each "decrement" is actually three steps: read → subtract → write. Interleaving means those steps from different threads mix together:</p>
+
+<pre><code>Thread 1: reads counter = 100
+Thread 2: reads counter = 100   // switched before Thread 1 wrote
+Thread 1: writes 99
+Thread 2: writes 99             // both subtracted 1, counter only moved by 1
+// Two bookings happened. One seat consumed. Oversold.</code></pre>
+
+<p>Locks prevent interleaving by forcing threads to take turns. But locks under high concurrency cause contention — threads queue, throughput drops.</p>
+
+<h3>Why Redis Doesn't Need Locks</h3>
+<p>Redis is <strong>single-threaded for command execution</strong>. Every command runs to completion before the next one starts. No interleaving is possible. No locks needed.</p>
+
+<pre><code>// All three pods fire DECR simultaneously
+// Redis processes them one at a time:
+Pod 1 DECR → 1999  (complete)
+Pod 2 DECR → 1998  (complete)
+Pod 3 DECR → 1997  (complete)
+// No race condition. No interleaving. No locks.</code></pre>
+
+<div class="interview">
+  <strong>Interview phrasing:</strong> "Redis achieves atomicity through single-threaded command execution, not locking. Every command runs to completion before the next starts. No interleaving is possible so no locks are needed."
+</div>
+
+<h3>Why Single-Threaded Isn't Slow</h3>
+<p>Redis commands execute in <strong>microseconds</strong> (millionths of a second). At 50,000 requests per second, that's 50ms of actual work per second. Redis handles over 1 million operations per second on a single thread.</p>
+<p>The actual bottleneck is always the <strong>network round trip</strong> — typically 0.5–2ms. The command itself takes 0.001ms. Single-threaded execution is not the constraint.</p>
+<p>Compare to SQL Server: acquire row lock → read → write → release lock → write to transaction log → flush to disk = 5–10ms minimum. Redis: 0.001ms.</p>
+
+<h3>The Two Guards in Your System</h3>
+<table>
+  <thead><tr><th>Guard</th><th>Redis Command</th><th>What it prevents</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Capacity gate</td>
+      <td><code>DECR event:{eventId}:seats</code></td>
+      <td>Total overselling — more bookings than seats exist</td>
+    </tr>
+    <tr>
+      <td>Seat lock</td>
+      <td><code>SET seat:lock:{eventId}:{seatId} NX EX 300</code></td>
+      <td>Two users booking the exact same physical seat simultaneously</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Why both?</strong> The capacity gate alone doesn't prevent two people booking seat A1 — they both pass the capacity check. The seat lock alone doesn't prevent total overselling — it only guards one specific seat. You need both for different failure modes.</p>
+
+<h3>Rollback When Counter Goes Negative</h3>
+<pre><code>long remaining = await cache.StringDecrementAsync(seatsKey);
+if (remaining &lt; 0)
+{
+    await cache.StringIncrementAsync(seatsKey);  // restore counter
+    await cache.KeyDeleteAsync(lockKey);          // release seat lock
+    return Results.Conflict("Sold out");
+}</code></pre>
+<p>This is <strong>optimistic concurrency with rollback</strong> — let the operation happen, check if valid, undo if not. The alternative (pessimistic — check first, then act) requires two separate operations with a race condition between them.</p>
+
+<div class="interview">
+  <strong>Full interview answer for distributed counter:</strong> "I use Redis with two separate guards. First, an atomic DECR on the event capacity counter — Redis is single-threaded so no two DECRs interleave, and if the result goes negative I immediately INCR to restore and reject the request. Second, a SETNX seat lock per specific seat with a 5-minute TTL — this prevents two users booking the exact same seat. If either guard fails I roll back both. SQL is the source of truth for the booking record — Redis is the fast concurrency gate in front of it. The CAP trade-off is CP — if Redis is down we reject requests rather than risk overselling, because an oversold seat is unrecoverable."
+</div>
+
+<!-- ══════════════════════════════ 7. DDD ══════════════════════════════ -->
+<h2 id="ddd">7. Domain-Driven Design (DDD)</h2>
+
+<p>DDD is a way of writing code that mirrors how the business thinks. The core problem it solves: business rules scattered across the codebase, duplicated, easy to bypass, impossible to test in isolation.</p>
+
+<h3>The Core Problem — Anemic Domain Model</h3>
+<p>An <strong>anemic domain model</strong> is a class that has data but no behaviour. "Anemic" means weak, lacking vitality. The object just sits there passively while everything external acts on it.</p>
+
+<pre><code>// Anemic — anyone, anywhere can do this
+booking.Status = "Confirmed";
+booking.Status = "Banana";      // no rules, compiles fine
+booking.Status = null;          // crashes later</code></pre>
+
+<p>The business rule "only confirm a Pending booking" exists as an if-statement somewhere in Program.cs. Every developer who touches status must know to check that file. When someone forgets, bugs appear.</p>
+
+<h3>The Solution — Aggregate Root</h3>
+<p>An object that <strong>protects its own state</strong>. Nobody changes it directly. They call methods.</p>
+
+<pre><code>public class Booking
+{
+    public string Status { get; private set; } = "Pending";  // private set
+
+    public void Confirm()
+    {
+        if (Status == "Confirmed") return;           // idempotent
+        if (Status != "Pending")
+            throw new InvalidOperationException(...); // rule enforced
+        Status = "Confirmed";
+    }
+
+    public void Expire()
+    {
+        if (Status != "Pending") return;  // silent no-op — safe to call twice
+        Status = "Expired";
+    }
+}</code></pre>
+
+<p><code>private set</code> means nothing outside the class can assign to Status. <code>Confirm()</code> is the only door in. The compiler enforces this — trying to do <code>booking.Status = "Confirmed"</code> directly is a compile error.</p>
+
+<h3>The Four Core Concepts</h3>
+
+<div class="concept-card">
+  <h4>Aggregate Root</h4>
+  <p>An object that controls its own state. Only entry point for changes. Your <code>Booking</code> class is one.</p>
+  <p><strong>Plain English:</strong> Object protects itself. You call a method. The method checks rules. Only then does state change.</p>
+</div>
+
+<div class="concept-card">
+  <h4>Entity</h4>
+  <p>An object with an ID. Two entities with the same values but different IDs are different things.</p>
+  <p><strong>Plain English:</strong> Your <code>Booking</code> has a <code>Guid Id</code>. Two bookings for the same seat at the same event are still different bookings because they have different IDs.</p>
+  <p><strong>Test:</strong> If two objects have identical values, are they the same? For an Entity — no, because the ID is different.</p>
+</div>
+
+<div class="concept-card">
+  <h4>Value Object</h4>
+  <p>An object with no ID. Defined purely by its values. Immutable — never modified, only replaced.</p>
+  <p><strong>Plain English:</strong> <code>SeatId("A1")</code> equals another <code>SeatId("A1")</code> because the value is the same. Like a £10 note — you don't care which specific note it is, just that it's £10.</p>
+  <p><strong>Three benefits:</strong></p>
+  <ul>
+    <li>Validation at creation — <code>SeatId("")</code> throws, invalid state is impossible</li>
+    <li>Type safety — compiler catches passing an EventId where SeatId is expected</li>
+    <li>Behaviour on the value — <code>seatId.Row</code>, <code>seatId.IsVIP</code></li>
+  </ul>
+  <p><strong>Test:</strong> If two objects have identical values, are they the same? For a Value Object — yes.</p>
+</div>
+
+<div class="concept-card">
+  <h4>Domain Event</h4>
+  <p>Something that happened. Always past tense. <code>BookingConfirmed</code>. <code>BookingExpired</code>.</p>
+  <p><strong>Plain English:</strong> When <code>Confirm()</code> is called, the booking records that something happened. Other parts of the system react — publish to RabbitMQ, send email, update read model. The booking doesn't know or care what happens next. It just records the fact.</p>
+  <p>This decouples the domain from infrastructure. The booking's job ends when it raises the event.</p>
+</div>
+
+<div class="concept-card">
+  <h4>Bounded Context</h4>
+  <p>A boundary around a part of the system where words have a specific meaning.</p>
+  <p><strong>Plain English:</strong> "Booking" in Booking.API means a reservation with payment, status, and a 5-minute hold window. "Booking" in Catalog.API means "a seat was sold, decrement the count." Same word, different model, different service.</p>
+  <p><strong>Why your services are separate:</strong> They're in different bounded contexts. Each context owns its model completely. Sharing a database would mean sharing the model — breaking the boundary.</p>
+  <p><strong>Why BookingEvent DTO is duplicated:</strong> Each service owns its own copy of the wire contract. Sharing a type library couples two independently deployable services.</p>
+</div>
+
+<div class="concept-card">
+  <h4>Repository Pattern</h4>
+  <p>Hides database implementation behind an interface. The domain knows nothing about SQL, EF Core, or MongoDB.</p>
+  <pre><code>public interface IBookingRepository
+{
+    Task&lt;Booking&gt; GetByIdAsync(Guid id);
+    Task SaveAsync(Booking booking);
+}
+// Domain depends on this interface
+// EF Core implementation is hidden behind it</code></pre>
+  <p><strong>Plain English:</strong> The Booking aggregate doesn't call DbContext directly. A repository does the saving. Swap SQL Server for Postgres — change one class. Nothing in the domain changes.</p>
+</div>
+
+<h3>Static Factory Method — Why not just a constructor?</h3>
+<pre><code>// Static factory method
+public static Booking Create(string eventId, string seatId, string userId) { ... }
+
+// Usage
+var booking = Booking.Create("evt-coldplay", "A1", "user-123");
+</code></pre>
+<ul>
+  <li><strong>It has a name</strong> — <code>Booking.Create()</code> communicates intent. <code>new Booking()</code> does not.</li>
+  <li><strong>Forces valid state</strong> — the only door in. All validation happens here.</li>
+  <li><strong>Private constructor</strong> — prevents bypassing Create() via <code>new Booking()</code>. EF Core can still call it via reflection (it bypasses access rules).</li>
+</ul>
+
+<h3>Why Confirm() is Idempotent but Expire() Silently Returns</h3>
+<table>
+  <thead><tr><th>Method</th><th>Caller</th><th>Behaviour if already done</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Confirm()</code></td>
+      <td>HTTP endpoint — user just paid</td>
+      <td>Silent return if already Confirmed. Throws if Expired.</td>
+      <td>Idempotent for double-clicks. Expired = genuine problem, caller must know.</td>
+    </tr>
+    <tr>
+      <td><code>Expire()</code></td>
+      <td>Background worker sweeping many bookings</td>
+      <td>Silent return always</td>
+      <td>Worker must not crash on stale rows. Already expired = job done.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="interview">
+  <strong>Interview answer — "Walk me through your Booking class":</strong>
+  "Booking is an aggregate root. All properties have private setters — nothing outside the class can change state directly. Business rules live on the object through methods: Confirm() enforces that only a Pending booking can be confirmed and is idempotent so calling it twice is safe — important for payment webhooks that may fire more than once. Expire() is a silent no-op if already expired — the background worker processes many bookings and should never crash on a stale row. If any developer tries to set Status directly, it's a compile error. The rules are enforced by the compiler, not by convention or code review."
+</div>
+
+<div style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: #9ca3af; font-size: 12px;">
+  System Design Concepts — Interview Reference &nbsp;·&nbsp; Updated July 2026
+</div>
+
+</body>
+</html>

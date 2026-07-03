@@ -947,9 +947,14 @@ var db = scope.ServiceProvider.GetRequiredService&lt;BookingDbContext&gt;();</co
       <td>Single client can hammer /book endpoint</td>
     </tr>
     <tr>
-      <td><strong>DDD + Clean Architecture</strong></td>
-      <td>Intentionally deferred — next major refactor</td>
-      <td>Domain rules in Program.cs, anemic entity model, untestable business logic</td>
+      <td><strong>DDD — Booking Aggregate Root</strong></td>
+      <td><strong>✅ Implemented</strong> — Booking is now an aggregate root with private setters and domain methods</td>
+      <td>N/A — done</td>
+    </tr>
+    <tr>
+      <td><strong>DDD — Clean Architecture layers (Domain/Infrastructure/API split)</strong></td>
+      <td>Next refactor — Booking.Domain and Booking.Infrastructure projects not yet created</td>
+      <td>Domain logic still in same project as HTTP layer. Cannot unit test domain without spinning up the API.</td>
     </tr>
     <tr>
       <td><strong>Tests</strong></td>
@@ -974,11 +979,16 @@ var db = scope.ServiceProvider.GetRequiredService&lt;BookingDbContext&gt;();</co
   </tbody>
 </table>
 
+<div class="good">
+  <strong>DDD aggregate root implemented:</strong> <code>Booking</code> is now an aggregate root. All properties
+  have <code>private set</code>. Business rules live on the object — <code>Confirm()</code> enforces Pending → Confirmed,
+  <code>Expire()</code> is idempotent, <code>MarkPublished()</code> is the only way to set PublishedAt.
+  Direct assignment like <code>booking.Status = "Confirmed"</code> is now a compile error.
+</div>
 <div class="warn">
-  <strong>The most important gap:</strong> The domain logic lives entirely in <code>Program.cs</code>.
-  Business rules like "you can only confirm a Pending booking" are if-statements in an HTTP handler,
-  not protected methods on the Booking entity. This makes the logic impossible to unit test and easy
-  to bypass. The upcoming DDD refactor addresses this.
+  <strong>Remaining gap:</strong> Domain logic still lives in the same project as the HTTP layer.
+  The next step is splitting into <code>Booking.Domain</code> / <code>Booking.Infrastructure</code> / <code>Booking.API</code>
+  so the domain can be tested without spinning up the web server or database.
 </div>
 
 <div style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: #9ca3af; font-size: 12px;">

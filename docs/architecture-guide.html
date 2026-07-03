@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Event Ticketing System — Architecture Guide</title>
+<style>
+  :root {
+    --blue:    #1a56db;
+    --green:   #057a55;
+    --red:     #c81e1e;
+    --orange:  #b45309;
+    --purple:  #6c2bd9;
+    --grey:    #374151;
+    --light:   #f9fafb;
+    --border:  #e5e7eb;
+    --code-bg: #1e1e2e;
+    --code-fg: #cdd6f4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #111827;
+    background: #fff;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+  }
+
+  /* ── Cover ── */
+  .cover {
+    border-bottom: 3px solid var(--blue);
+    padding-bottom: 40px;
+    margin-bottom: 48px;
+  }
+  .cover h1 {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--blue);
+    letter-spacing: -0.5px;
+  }
+  .cover .subtitle {
+    font-size: 16px;
+    color: #6b7280;
+    margin-top: 6px;
+  }
+  .cover .meta {
+    margin-top: 20px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--light);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--grey);
+  }
+
+  /* ── Headings ── */
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    margin: 48px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--blue);
+    margin: 28px 0 10px;
+  }
+  h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #374151;
+    margin: 20px 0 6px;
+  }
+  p { margin-bottom: 12px; }
+
+  /* ── TOC ── */
+  .toc {
+    background: var(--light);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 48px;
+  }
+  .toc h2 { margin-top: 0; border: none; font-size: 16px; color: var(--grey); }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 6px 0; }
+  .toc a { color: var(--blue); text-decoration: none; font-weight: 500; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ── Callout boxes ── */
+  .why {
+    background: #eff6ff;
+    border-left: 4px solid var(--blue);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .why strong { color: var(--blue); display: block; margin-bottom: 4px; }
+
+  .warn {
+    background: #fff7ed;
+    border-left: 4px solid var(--orange);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .warn strong { color: var(--orange); display: block; margin-bottom: 4px; }
+
+  .good {
+    background: #f0fdf4;
+    border-left: 4px solid var(--green);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .good strong { color: var(--green); display: block; margin-bottom: 4px; }
+
+  /* ── Code ── */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    border-radius: 8px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin: 12px 0 18px;
+  }
+  code {
+    background: #f3f4f6;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 12.5px;
+    color: #be185d;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 13px;
+  }
+  th {
+    background: #f3f4f6;
+    font-weight: 700;
+    text-align: left;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    color: #374151;
+  }
+  td {
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  /* ── Architecture diagram ── */
+  .diagram {
+    background: var(--code-bg);
+    color: #a6e3a1;
+    border-radius: 10px;
+    padding: 24px 28px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    margin: 16px 0 24px;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  /* ── Flow steps ── */
+  .flow {
+    counter-reset: flow;
+    margin: 16px 0;
+  }
+  .flow-step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+  }
+  .flow-step::before {
+    counter-increment: flow;
+    content: counter(flow);
+    min-width: 28px;
+    height: 28px;
+    background: var(--blue);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* ── Pattern card ── */
+  .pattern-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+  .pattern-card h3 { margin-top: 0; }
+  .pattern-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .tag {
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 4px;
+    padding: 2px 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .tag-pattern { background: #ede9fe; color: #5b21b6; }
+  .tag-principle { background: #dbeafe; color: #1e40af; }
+  .tag-cap { background: #fef3c7; color: #92400e; }
+
+  /* ── Service box ── */
+  .service-box {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 32px;
+    overflow: hidden;
+  }
+  .service-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .service-body { padding: 20px 24px; }
+  .service-header.blue  { background: #eff6ff; color: var(--blue); border-bottom: 1px solid #bfdbfe; }
+  .service-header.green { background: #f0fdf4; color: var(--green); border-bottom: 1px solid #bbf7d0; }
+  .service-header.purple{ background: #f5f3ff; color: var(--purple); border-bottom: 1px solid #ddd6fe; }
+
+  ul { padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; }
+
+  /* ── Print ── */
+  @media print {
+    body { max-width: 100%; padding: 20px; font-size: 13px; }
+    pre { font-size: 11px; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    .pattern-card, .service-box { page-break-inside: avoid; }
+    .diagram { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ COVER ═══════════════════════════════════════ -->
+<div class="cover">
+  <h1>Event Ticketing System</h1>
+  <div class="subtitle">Architecture Guide — Microservices, Design Patterns &amp; Rationale</div>
+  <div class="meta">
+    <span class="badge">ASP.NET Core 10</span>
+    <span class="badge">Microservices</span>
+    <span class="badge">Docker Compose</span>
+    <span class="badge">RabbitMQ · Redis · SQL Server · MongoDB</span>
+    <span class="badge">YARP API Gateway</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ TOC ════════════════════════════════════════ -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ol>
+    <li><a href="#overview">System Overview</a></li>
+    <li><a href="#architecture">Architecture Diagram</a></li>
+    <li><a href="#services">Services Deep Dive</a></li>
+    <li><a href="#booking-flow">The Booking Flow — Step by Step</a></li>
+    <li><a href="#patterns">Design Patterns Employed</a></li>
+    <li><a href="#cap">CAP Theorem in Practice</a></li>
+    <li><a href="#decisions">Key Technical Decisions &amp; Why</a></li>
+    <li><a href="#next">What's Not Here Yet (and Why)</a></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════ 1. OVERVIEW ══════════════════════════════════ -->
+<h2 id="overview">1. System Overview</h2>
+
+<p>
+  This is a cloud-native <strong>event ticketing system</strong> — users browse events, reserve seats,
+  and confirm bookings through a payment step. The system is intentionally complex enough to demonstrate
+  real production concerns: <em>concurrency</em>, <em>distributed consistency</em>, <em>reliable messaging</em>,
+  and <em>compensating transactions</em>.
+</p>
+
+<p>
+  It is built as a set of <strong>microservices</strong> — independently deployable processes that each own
+  their own data store and communicate through well-defined contracts. No service reaches into another
+  service's database.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Service</th><th>Responsibility</th><th>Data Store</th><th>Port (local)</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>ApiGateway</strong></td><td>Single entry point, routes to downstream services</td><td>None</td><td>5000</td></tr>
+    <tr><td><strong>Booking.API</strong></td><td>Reserve seats, process payments, publish confirmed bookings</td><td>SQL Server + Redis</td><td>4025</td></tr>
+    <tr><td><strong>Catalog.API</strong></td><td>Event catalogue, eventually-consistent seat counts</td><td>MongoDB + Redis (seed)</td><td>4024</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════ 2. ARCHITECTURE ══════════════════════════════ -->
+<h2 id="architecture">2. Architecture Diagram</h2>
+
+<div class="diagram">┌─────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT (curl / Postman)                        │
+└──────────────────────────────────┬──────────────────────────────────────┘
+                                   │ HTTP
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        API GATEWAY  (YARP)  :5000                        │
+│  /catalog/** ──► Catalog.API                                             │
+│  /book/**    ──► Booking.API                                             │
+└────────────────┬──────────────────────────────┬────────────────────────┘
+                 │ HTTP                          │ HTTP
+                 ▼                              ▼
+┌───────────────────────────┐     ┌───────────────────────────────────────┐
+│      CATALOG.API  :4024   │     │           BOOKING.API  :4025           │
+│                           │     │                                        │
+│  GET /items               │     │  POST /book/{eventId}/{seatId}         │
+│                           │     │  POST /payments/{bookingId}/confirm    │
+│  ┌─────────────────────┐  │     │                                        │
+│  │  CatalogSyncWorker  │  │     │  ┌──────────────────────────────────┐ │
+│  │  (BackgroundService)│  │     │  │  OutboxRelayWorker               │ │
+│  │  Subscribes fanout  │  │     │  │  (BackgroundService)             │ │
+│  └────────┬────────────┘  │     │  │  Polls SQL → publishes RabbitMQ  │ │
+│           │               │     │  └──────────────┬───────────────────┘ │
+│           │               │     │                 │                      │
+│           ▼               │     │  ┌──────────────────────────────────┐ │
+│  ┌─────────────────────┐  │     │  │  BookingExpiryWorker             │ │
+│  │   MongoDB           │  │     │  │  (BackgroundService)             │ │
+│  │   CatalogDb         │  │     │  │  Sweeps Pending > 5min           │ │
+│  │   AvailableSeats    │  │     │  └──────────────────────────────────┘ │
+│  │   (read model)      │  │     │                                        │
+│  └─────────────────────┘  │     │  ┌──────────────┐  ┌───────────────┐  │
+│                           │     │  │  SQL Server  │  │    Redis      │  │
+└────────────┬──────────────┘     │  │  BookingDb   │  │  seat counts  │  │
+             │                    │  │  (write auth)│  │  seat locks   │  │
+             │                    │  └──────────────┘  └───────────────┘  │
+             │                    └──────────────────┬─────────────────────┘
+             │                                       │
+             │   ◄──────── RabbitMQ Fanout ──────────┘
+             │             "ticket_events"
+             │             (durable, persistent msgs)
+             │
+       Decrement AvailableSeats
+       in MongoDB per EventId</div>
+
+<!-- ═══════════════════════════════════════ 3. SERVICES ═════════════════════════════════ -->
+<h2 id="services">3. Services Deep Dive</h2>
+
+<div class="service-box">
+  <div class="service-header blue">API Gateway (YARP)</div>
+  <div class="service-body">
+    <p>
+      YARP (Yet Another Reverse Proxy) is Microsoft's reverse proxy library. It is the <strong>single entry point</strong>
+      for all clients. No client ever calls Booking.API or Catalog.API directly — they call the gateway.
+    </p>
+    <h4>Routing rules</h4>
+    <ul>
+      <li><code>/catalog/**</code> → strips the prefix and forwards to <code>http://catalog-api:8080</code></li>
+      <li><code>/book/**</code> → forwards as-is to <code>http://booking-api:8080</code></li>
+    </ul>
+    <div class="why">
+      <strong>Why a gateway?</strong>
+      Without it, clients must know the address of every downstream service. Adding a new service means updating every client.
+      The gateway absorbs that complexity — clients have one address forever. It also becomes the single place to add
+      authentication enforcement, rate limiting, SSL termination, and request logging in the future.
+    </div>
+  </div>
+</div>
+
+<div class="service-box">
+  <div class="service-header green">Booking.API</div>
+  <div class="service-body">
+    <p>Owns the entire booking lifecycle: reservation → payment confirmation → event publication.</p>
+
+    <h4>Endpoints</h4>
+    <table>
+      <thead><tr><th>Endpoint</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>POST /book/{eventId}/{seatId}</code></td>
+          <td>Acquires seat lock, decrements capacity, creates Pending booking in SQL</td>
+        </tr>
+        <tr>
+          <td><code>POST /payments/{bookingId}/confirm</code></td>
+          <td>Flips booking to Confirmed inside a DB transaction</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Background Workers</h4>
+    <table>
+      <thead><tr><th>Worker</th><th>Poll interval</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>OutboxRelayWorker</code></td><td>5 seconds</td><td>Finds Confirmed + unpublished bookings, pushes to RabbitMQ, marks PublishedAt</td></tr>
+        <tr><td><code>BookingExpiryWorker</code></td><td>30 seconds</td><td>Finds Pending bookings older than 5 minutes, restores Redis counter, releases seat lock, marks Expired</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Data stores</h4>
+    <ul>
+      <li><strong>SQL Server</strong> — authoritative source of truth for all bookings. ACID transactions. EF Core manages schema via migrations.</li>
+      <li><strong>Redis</strong> — two separate concerns:
+        <ul>
+          <li><code>event:{eventId}:seats</code> — atomic integer counter, decremented on reserve, incremented on release</li>
+          <li><code>seat:lock:{eventId}:{seatId}</code> — SETNX flag with 5-min TTL, prevents two users booking the exact same seat</li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<div class="service-box">
+  <div class="service-header purple">Catalog.API</div>
+  <div class="service-body">
+    <p>Owns the event catalogue and provides the public-facing seat availability for browsing.</p>
+
+    <h4>Endpoints</h4>
+    <table>
+      <thead><tr><th>Endpoint</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /items</code></td><td>Returns all events with their current AvailableSeats from MongoDB</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Background Workers</h4>
+    <table>
+      <thead><tr><th>Worker</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>CatalogSyncWorker</code></td><td>Subscribes to <code>ticket_events</code> fanout. On each message, decrements <code>AvailableSeats</code> in MongoDB for the specific EventId.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Data stores</h4>
+    <ul>
+      <li><strong>MongoDB</strong> — document store for the event catalogue. AvailableSeats here is the <em>display</em> count — eventually consistent, not the booking gate.</li>
+      <li><strong>Redis</strong> — Catalog.API seeds the initial seat counters on startup. It owns the initial values; Booking.API owns the decrements thereafter.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ 4. BOOKING FLOW ══════════════════════════════ -->
+<h2 id="booking-flow">4. The Booking Flow — Step by Step</h2>
+
+<h3>Step 1: User books a seat</h3>
+<p><code>POST /book/evt-coldplay/A1</code></p>
+
+<div class="flow">
+  <div class="flow-step">
+    <div>
+      <strong>Seat lock (SETNX)</strong> — Redis <code>SET seat:lock:evt-coldplay:A1 {userId} EX 300 NX</code>.
+      The <code>NX</code> flag means "only set if not exists". If someone else holds this exact seat, the command returns false and the request is rejected immediately with 409 Conflict.
+      <div class="why"><strong>Why?</strong> Two users could both pass the capacity check simultaneously. The seat lock prevents two different people from booking the same physical seat A1 for the same event.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      <strong>Capacity guard (DECR)</strong> — Redis <code>DECR event:evt-coldplay:seats</code>.
+      This is <em>atomic</em> — Redis processes it as a single operation. The returned value is the new count.
+      If it's below 0, the event is sold out; we immediately INCR to restore the counter and release the seat lock.
+      <div class="why"><strong>Why Redis, not SQL?</strong> SQL would require a SELECT + UPDATE under a lock — two round trips, heavy under load. A Redis DECR is a single atomic instruction, typically sub-millisecond. Under 10,000 concurrent booking attempts, this does not race.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      <strong>Persist Pending booking</strong> — SQL Server INSERT.
+      Wrapped in try/catch: if SQL fails after the Redis DECR, we roll back both the counter (INCR) and the seat lock (DEL) before returning an error.
+      <div class="why"><strong>Why?</strong> If SQL throws and we don't roll back Redis, the seat counter is permanently one lower than reality. That seat is silently lost — neither bookable nor shown as available. The rollback closes that gap.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      Return <code>bookingId</code> to the client. The booking is <strong>Pending</strong>. Seat is held for 5 minutes.
+    </div>
+  </div>
+</div>
+
+<h3>Step 2: User pays</h3>
+<p><code>POST /payments/{bookingId}/confirm</code></p>
+
+<div class="flow">
+  <div class="flow-step">
+    <div>
+      Load the booking from SQL. Validate it exists and is still Pending. If already Confirmed or Expired, reject with 409.
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      Open a <strong>database transaction</strong>, flip Status to Confirmed, commit.
+      <div class="why"><strong>Why a transaction?</strong> In future when publishing to a payment provider runs in the same unit of work, the transaction ensures both succeed or both roll back.</div>
+    </div>
+  </div>
+</div>
+
+<h3>Step 3: OutboxRelayWorker publishes the event</h3>
+
+<div class="flow">
+  <div class="flow-step">
+    <div>
+      Every 5 seconds, the worker queries SQL: <code>WHERE Status = 'Confirmed' AND PublishedAt IS NULL</code>.
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      For each unpublished booking, it serialises a <code>BookingEvent</code> DTO and publishes to the
+      <code>ticket_events</code> <strong>fanout exchange</strong> in RabbitMQ with <code>Persistent = true</code>.
+      <div class="why"><strong>Why not publish directly from the /confirm endpoint?</strong> If RabbitMQ is temporarily down, a direct publish would fail — and the booking is already confirmed. Do you return an error? Roll back? The outbox sidesteps this entirely: confirm succeeds, the event sits in SQL, and the relay keeps retrying until RabbitMQ recovers. Nothing is lost.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      Mark <code>PublishedAt = UtcNow</code> and save. The next poll cycle skips this booking.
+    </div>
+  </div>
+</div>
+
+<h3>Step 4: CatalogSyncWorker updates the read model</h3>
+
+<div class="flow">
+  <div class="flow-step">
+    <div>
+      CatalogSyncWorker receives the message from its <code>catalog_sync_queue</code> (bound to the fanout).
+      It deserialises the <code>BookingEvent</code>, extracts the <code>EventId</code>.
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      MongoDB: <code>db.Tickets.UpdateOne({ EventId: "evt-coldplay" }, { $inc: { AvailableSeats: -1 } })</code>
+      <div class="why"><strong>Why decrement MongoDB at all if Redis already guards capacity?</strong> Redis is the authoritative gate for booking decisions. MongoDB is the display layer — what users see on the catalogue page. Without syncing MongoDB, the "seats available" count shown to browsers would never decrease no matter how many bookings occurred.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      ACK the message. RabbitMQ removes it from the queue. If the handler throws before ACK, RabbitMQ redelivers.
+    </div>
+  </div>
+</div>
+
+<h3>Step 5: Abandoned checkout — BookingExpiryWorker compensates</h3>
+
+<div class="flow">
+  <div class="flow-step">
+    <div>
+      Every 30 seconds, the worker queries SQL: <code>WHERE Status = 'Pending' AND CreatedAt &lt; (Now - 5 min)</code>.
+    </div>
+  </div>
+  <div class="flow-step">
+    <div>
+      For each expired booking: INCR the Redis seat counter, DEL the seat lock, set Status = Expired, save to SQL.
+      <div class="why"><strong>Why?</strong> When a user abandons checkout, the Redis counter has already been decremented and the seat lock set. Without this worker, those resources are permanently consumed — the event appears sold out even though no one bought the seat. This is the <em>compensating transaction</em>: it undoes the side effects of an operation that was never completed.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ 5. PATTERNS ══════════════════════════════════ -->
+<h2 id="patterns">5. Design Patterns Employed</h2>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">Outbox Pattern</h3>
+    <span class="tag tag-pattern">Pattern</span>
+  </div>
+  <p>
+    The <code>Bookings</code> SQL table doubles as a message outbox. The <code>PublishedAt</code> column
+    is the outbox marker — <code>null</code> means the message hasn't been sent yet.
+    The <code>OutboxRelayWorker</code> is the relay that polls and publishes.
+  </p>
+  <p>
+    This implements <strong>at-least-once delivery</strong>: if the relay crashes mid-publish, on restart it finds
+    the same rows still with <code>PublishedAt = null</code> and retries. Consumers must be idempotent.
+  </p>
+  <div class="why">
+    <strong>The pain it solves:</strong> If you publish directly from the HTTP handler and the broker is down,
+    you must choose: fail the user's request (bad UX), or silently lose the event (data loss).
+    The outbox makes durability the database's problem — SQL is already the source of truth.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">Read Model (CQRS) — not yet a true Materialized View</h3>
+    <span class="tag tag-pattern">Pattern</span>
+    <span class="tag tag-cap">Enhancement Pending</span>
+  </div>
+  <p>
+    MongoDB's <code>AvailableSeats</code> is a <strong>denormalized derived field</strong> — a read model kept
+    eventually consistent by <code>CatalogSyncWorker</code>. The authoritative state for seat availability lives in
+    Redis (booking gate) and SQL (booking records). MongoDB holds a copy shaped for catalogue browsing.
+  </p>
+  <p>
+    This is <em>not</em> a Materialized View in the strict database sense. A true Materialized View is a separate
+    schema object — a pre-computed query result across multiple sources, rebuilt on change. For example,
+    a proper <code>EventSummaries</code> collection would aggregate confirmed bookings, pending holds, and
+    revenue across Redis + SQL + MongoDB into one document optimised for display:
+  </p>
+  <pre><code>// What a proper Materialized View looks like (not yet built)
+{
+  "EventId": "evt-coldplay",
+  "EventName": "Coldplay - Spheres",
+  "AvailableSeats": 1985,
+  "ConfirmedBookings": 15,
+  "PendingHolds": 3,
+  "RevenueToDate": 1800.00
+}</code></pre>
+  <div class="why">
+    <strong>The pain it solves (intent is right, implementation is partial):</strong> Without any read model,
+    every <code>GET /items</code> would need to query Redis for every event's counter — many round trips per page load.
+    The read model trades write complexity (keeping it in sync) for read simplicity (one MongoDB query).
+    The gap: <code>AvailableSeats</code> is just one field on an existing document, not a purpose-built projection
+    across multiple sources. The <strong>Materialized View pattern is on the enhancement backlog</strong>.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">Compensating Transaction</h3>
+    <span class="tag tag-pattern">Pattern</span>
+  </div>
+  <p>
+    The <code>BookingExpiryWorker</code> is a compensating transaction — it undoes the side effects
+    of an incomplete operation. When a user starts a booking (decrement counter, lock seat) but never
+    pays, the worker reverses those effects (increment counter, delete lock).
+  </p>
+  <p>
+    This is the microservices alternative to a database ROLLBACK. Because Redis and SQL are two separate
+    data stores, there is no single transaction spanning both. The compensation is the manual equivalent.
+  </p>
+  <div class="good">
+    <strong>Relation to Saga pattern:</strong> A formal Saga is a sequence of named compensating steps
+    triggered by failure at any point in a distributed workflow. This worker is saga-adjacent — it compensates
+    the booking reservation step specifically. A full Saga would handle payment failures, notification failures, etc.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">Repository Pattern</h3>
+    <span class="tag tag-pattern">Pattern</span>
+    <span class="tag tag-principle">SOLID — D</span>
+  </div>
+  <p>
+    Catalog.API uses <code>ICatalogRepository</code> (interface) implemented by <code>CatalogRepository</code> (MongoDB).
+    The application layer (Program.cs, CatalogSyncWorker) depends on the interface, not the concrete MongoDB class.
+  </p>
+  <pre><code>// Catalog.API depends on this — knows nothing about MongoDB
+public interface ICatalogRepository {
+    Task DecrementAvailableSeatsAsync(string eventId);
+    Task&lt;List&lt;CatalogItem&gt;&gt; GetAllAsync();
+    Task SeedDataAsync(IEnumerable&lt;CatalogItem&gt; items);
+}</code></pre>
+  <div class="why">
+    <strong>The pain it solves (Dependency Inversion):</strong> If you want to swap MongoDB for Postgres,
+    you write a new class and swap one registration in DI. No other code changes. Without this abstraction,
+    MongoDB driver calls are scattered everywhere and a data store change becomes a full rewrite.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">Fanout Exchange (Publish/Subscribe)</h3>
+    <span class="tag tag-pattern">Pattern</span>
+  </div>
+  <p>
+    RabbitMQ's <code>ticket_events</code> exchange is a <strong>fanout</strong>: it copies every message
+    to every queue bound to it. Today, only <code>catalog_sync_queue</code> is bound. Tomorrow, you bind
+    <code>notification_queue</code> and <code>analytics_queue</code> — the publisher never changes.
+  </p>
+  <div class="why">
+    <strong>The pain it solves:</strong> With a direct exchange (point-to-point), adding a new consumer
+    means changing the publisher to know about the new destination.
+    Fanout inverts this — consumers self-register. The publisher is completely decoupled from who's listening.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">CQRS — Read/Write Store Separation (partial)</h3>
+    <span class="tag tag-pattern">Pattern</span>
+    <span class="tag tag-cap">Enhancement Pending</span>
+  </div>
+  <p>
+    CQRS (Command Query Responsibility Segregation) means the write path and read path use separate models.
+    This system implements the <strong>data side</strong> of CQRS:
+  </p>
+  <ul>
+    <li><strong>Write path</strong> — <code>POST /book</code>, <code>POST /payments/confirm</code> write to Redis + SQL Server (authoritative stores)</li>
+    <li><strong>Read path</strong> — <code>GET /items</code> reads from MongoDB (a separate store shaped for display)</li>
+    <li>The two stores are kept in sync asynchronously via <code>CatalogSyncWorker</code></li>
+  </ul>
+  <p>
+    What is <strong>not</strong> yet implemented is the <strong>code side</strong> of CQRS — explicit Command and Query
+    objects with separate handlers (typically via MediatR):
+  </p>
+  <pre><code>// Not yet implemented — what formal CQRS looks like
+public record CreateBookingCommand(string EventId, string SeatId, string UserId);
+public class CreateBookingCommandHandler : IRequestHandler&lt;CreateBookingCommand, Guid&gt; { ... }
+
+public record GetCatalogItemsQuery();
+public class GetCatalogItemsQueryHandler : IRequestHandler&lt;GetCatalogItemsQuery, List&lt;CatalogItem&gt;&gt; { ... }</code></pre>
+  <p>
+    Currently, all logic lives inline in <code>Program.cs</code> endpoints. The formal command/query separation
+    comes with the DDD + Clean Architecture restructure (on the backlog).
+  </p>
+  <div class="why">
+    <strong>The pain it solves:</strong> Without CQRS, adding a read replica or pointing reads at a cache requires
+    rewriting the same endpoint that also handles writes. With explicit command/query handlers, you swap the query
+    handler's data source (MongoDB → Redis → read replica) without touching the write handler at all.
+    Read and write scaling become independent decisions.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">Atomic Counter + SETNX Lock</h3>
+    <span class="tag tag-pattern">Pattern</span>
+    <span class="tag tag-cap">Concurrency</span>
+  </div>
+  <p>Two independent Redis guards protect the booking path:</p>
+  <pre><code>// Guard 1 — specific seat lock (SETNX = SET if Not eXists)
+bool locked = await cache.StringSetAsync(lockKey, userId,
+    TimeSpan.FromMinutes(5), When.NotExists);
+
+// Guard 2 — event capacity (atomic decrement)
+long remaining = await cache.StringDecrementAsync(seatsKey);
+if (remaining &lt; 0) { /* sold out — roll back */ }</code></pre>
+  <p>
+    These address two distinct failure modes: two users booking the <em>same seat</em> (seat lock),
+    and total overselling across <em>all seats</em> (capacity counter).
+  </p>
+  <div class="why">
+    <strong>Why two guards?</strong> The capacity counter alone prevents overselling but allows two people
+    to "book" seat A1 simultaneously (one would get a meaningless booking). The seat lock alone prevents
+    duplicate A1 bookings but doesn't cap total bookings. You need both.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ 6. CAP ═══════════════════════════════════════ -->
+<h2 id="cap">6. CAP Theorem in Practice</h2>
+
+<p>
+  CAP Theorem states a distributed system can only guarantee two of three properties:
+  <strong>Consistency</strong> (all reads see the latest write),
+  <strong>Availability</strong> (every request gets a response), and
+  <strong>Partition Tolerance</strong> (the system works despite network failures).
+  Since partitions are inevitable, the real choice is <strong>CP vs AP</strong> per component.
+</p>
+
+<p>
+  This system makes <em>different CAP trade-offs for different data stores</em> — intentionally, based on
+  the business consequence of getting it wrong.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Store</th><th>CAP Choice</th><th>Business Reason</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Redis (seat counter)</strong></td>
+      <td><span style="color:var(--blue);font-weight:700">CP</span></td>
+      <td>If Redis is unavailable, <code>/book</code> returns an error. We choose to be <em>unavailable</em> rather than risk selling the same seat twice. Overselling a concert ticket is unrecoverable — you cannot un-sell a seat.</td>
+    </tr>
+    <tr>
+      <td><strong>MongoDB (catalogue)</strong></td>
+      <td><span style="color:var(--green);font-weight:700">AP</span></td>
+      <td>If CatalogSyncWorker is behind, MongoDB shows "120 seats" when Redis says "115". The catalogue stays <em>available</em> with stale data. A user seeing a slightly wrong count is acceptable; a user unable to browse the catalogue is not.</td>
+    </tr>
+    <tr>
+      <td><strong>SQL Server (bookings)</strong></td>
+      <td><span style="color:var(--blue);font-weight:700">CP</span></td>
+      <td>ACID guarantees. If SQL is unavailable, booking fails. The Booking record is the financial source of truth — consistency is non-negotiable.</td>
+    </tr>
+    <tr>
+      <td><strong>RabbitMQ (event bus)</strong></td>
+      <td><span style="color:var(--green);font-weight:700">AP (via outbox)</span></td>
+      <td>If RabbitMQ is down, the outbox absorbs the messages. Delivery is delayed (temporarily unavailable from the consumer's perspective) but never lost. Eventual consistency.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="good">
+  <strong>Interview talking point:</strong> "I made different CAP trade-offs per data store based on the cost of inconsistency.
+  Redis and SQL are CP because the booking domain cannot tolerate inconsistency — money is involved.
+  MongoDB and RabbitMQ are AP because slightly stale catalogue data or delayed event delivery is a business-acceptable trade-off."
+</div>
+
+<!-- ═══════════════════════════════════════ 7. DECISIONS ═════════════════════════════════ -->
+<h2 id="decisions">7. Key Technical Decisions &amp; Why</h2>
+
+<h3>Database-per-Microservice</h3>
+<p>
+  Booking.API owns SQL Server. Catalog.API owns MongoDB. Neither service queries the other's database.
+  Cross-service data flows only through RabbitMQ messages.
+</p>
+<div class="why">
+  <strong>Why?</strong> A shared database is the tightest coupling possible — schema changes in one service
+  break another. Each service must be deployable and scalable independently. That requires full data ownership.
+  The cost: you cannot write a JOIN across services. You design around that with events and materialized views.
+</div>
+
+<h3>Polyglot Persistence</h3>
+<p>
+  SQL Server for transactional bookings (ACID, strong consistency, relational queries).
+  MongoDB for event catalogue (flexible document model, easy to add fields, scales reads horizontally).
+  Redis for real-time counters and locks (sub-millisecond atomic operations, no SQL locking overhead).
+</p>
+<div class="why">
+  <strong>Why not just use one database for everything?</strong> Each problem has a different shape.
+  A seat counter under concurrent load is not a SQL problem — it's an atomic increment problem, and Redis
+  solves it natively. A catalogue with varying event metadata is not a great relational fit — MongoDB's
+  document model is more natural. Using the right tool per problem is what polyglot persistence means.
+</div>
+
+<h3>YARP as API Gateway</h3>
+<p>
+  Microsoft's YARP library configured entirely through <code>appsettings.json</code> — no code required
+  for basic routing.
+</p>
+<div class="why">
+  <strong>Why YARP over NGINX or a custom proxy?</strong> YARP is a .NET library, not a separate process.
+  It runs in the same ASP.NET Core pipeline, benefits from the same DI container, and is configurable at
+  runtime without a sidecar container. For a .NET shop it is the lowest-friction choice.
+</div>
+
+<h3>BackgroundService for Workers</h3>
+<p>
+  All workers (<code>OutboxRelayWorker</code>, <code>BookingExpiryWorker</code>, <code>CatalogSyncWorker</code>)
+  implement ASP.NET Core's <code>BackgroundService</code> base class and run as hosted services within the
+  same process as the HTTP server.
+</p>
+<div class="why">
+  <strong>Why co-locate workers with the API?</strong> At this scale, a separate process for each worker
+  adds operational overhead (more containers, more networking, more monitoring) for no benefit.
+  The BackgroundService lifecycle is managed by the ASP.NET host — it starts on startup and gets a
+  <code>CancellationToken</code> on shutdown, so workers stop gracefully.
+</div>
+
+<h3>IServiceScopeFactory in Background Workers</h3>
+<p>
+  Workers use <code>IServiceScopeFactory.CreateScope()</code> to resolve <code>BookingDbContext</code>
+  rather than injecting it directly.
+</p>
+<pre><code>using var scope = _scopeFactory.CreateScope();
+var db = scope.ServiceProvider.GetRequiredService&lt;BookingDbContext&gt;();</code></pre>
+<div class="why">
+  <strong>Why?</strong> <code>DbContext</code> is a scoped service (one per HTTP request).
+  <code>BackgroundService</code> is a singleton — it lives for the application's entire lifetime.
+  You cannot inject a scoped service into a singleton (the scoped instance would be captured forever,
+  causing stale state and thread-safety issues). Creating a scope per loop iteration gives the worker
+  a fresh DbContext on each cycle.
+</div>
+
+<h3>BookingEvent as a Duplicated DTO</h3>
+<p>
+  Both Booking.API and Catalog.API define their own <code>BookingEvent</code> record with identical fields.
+  They are not in a shared library.
+</p>
+<div class="why">
+  <strong>Why not share the DTO in a common project?</strong>
+  A shared library couples two independently deployable services — a field rename in the shared project
+  forces both services to be updated and redeployed simultaneously. With duplicated DTOs, each service
+  owns its deserialization. The contract is enforced by the wire format (JSON field names), not by a
+  shared type. This is the microservices "share schema, not types" principle.
+</div>
+
+<h3>Serilog → Seq for Structured Logging</h3>
+<p>
+  Serilog writes structured JSON log entries (not plain text strings). Seq is a local log aggregation
+  server that indexes structured logs and allows querying by property.
+</p>
+<div class="why">
+  <strong>Why structured logging?</strong> A plain text log entry like <em>"Booking created for seat A1"</em>
+  requires regex to extract the seat. A structured entry <code>{ "SeatId": "A1", "EventId": "evt-coldplay" }</code>
+  is queryable by field. When you have three services each writing logs, searching for all log lines related
+  to one booking across all services by BookingId becomes a Seq query, not a grep through files.
+</div>
+
+<!-- ═══════════════════════════════════════ 8. NEXT ══════════════════════════════════════ -->
+<h2 id="next">8. What's Not Here Yet (and Why)</h2>
+
+<table>
+  <thead>
+    <tr><th>Missing</th><th>Why it's missing</th><th>Impact without it</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>JWT Authentication</strong></td>
+      <td>Not yet implemented — userId is a random Guid generated server-side</td>
+      <td>All endpoints are open. IDOR vulnerability on /confirm.</td>
+    </tr>
+    <tr>
+      <td><strong>IDOR fix on /confirm</strong></td>
+      <td>Requires JWT first (no identity to compare against)</td>
+      <td>Any caller can confirm any booking by guessing the bookingId</td>
+    </tr>
+    <tr>
+      <td><strong>Polly (retry + circuit breaker)</strong></td>
+      <td>Not yet implemented</td>
+      <td>RabbitMQ or SQL transient failures crash workers rather than retry with backoff</td>
+    </tr>
+    <tr>
+      <td><strong>Health check endpoints</strong></td>
+      <td>Not yet implemented</td>
+      <td>Kubernetes / load balancer cannot detect a degraded service</td>
+    </tr>
+    <tr>
+      <td><strong>Rate limiting</strong></td>
+      <td>Waiting for JWT (rate limit by user identity, not IP)</td>
+      <td>Single client can hammer /book endpoint</td>
+    </tr>
+    <tr>
+      <td><strong>DDD + Clean Architecture</strong></td>
+      <td>Intentionally deferred — next major refactor</td>
+      <td>Domain rules in Program.cs, anemic entity model, untestable business logic</td>
+    </tr>
+    <tr>
+      <td><strong>Tests</strong></td>
+      <td>No test projects exist</td>
+      <td>Refactors carry no safety net</td>
+    </tr>
+    <tr>
+      <td><strong>OpenTelemetry + distributed tracing</strong></td>
+      <td>Not yet implemented</td>
+      <td>Cannot trace a single booking request end-to-end across all services</td>
+    </tr>
+    <tr>
+      <td><strong>Secrets management</strong></td>
+      <td>Credentials in docker-compose.debug.yml</td>
+      <td>Credentials in source control — security risk</td>
+    </tr>
+    <tr>
+      <td><strong>Cache-miss repopulation</strong></td>
+      <td>Not yet implemented</td>
+      <td>If Redis restarts, seat counters are gone — all events appear sold out</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>The most important gap:</strong> The domain logic lives entirely in <code>Program.cs</code>.
+  Business rules like "you can only confirm a Pending booking" are if-statements in an HTTP handler,
+  not protected methods on the Booking entity. This makes the logic impossible to unit test and easy
+  to bypass. The upcoming DDD refactor addresses this.
+</div>
+
+<div style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: #9ca3af; font-size: 12px;">
+  Event Ticketing System — Architecture Guide &nbsp;·&nbsp; Generated 2026
+</div>
+
+</body>
+</html>

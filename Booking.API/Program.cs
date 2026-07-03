@@ -81,8 +81,20 @@ app.MapPost("/book/{eventId}/{seatId}", async (string eventId, string seatId, IC
         Status = "Pending",
         CreatedAt = DateTime.UtcNow
     };
-    db.Bookings.Add(booking);
-    await db.SaveChangesAsync();
+
+    try
+    {
+        db.Bookings.Add(booking);
+        await db.SaveChangesAsync();
+    }
+    catch (Exception ex)
+    {
+        // SQL failed after Redis DECR succeeded — roll back both guards so the seat isn't permanently lost.
+        await cache.StringIncrementAsync(seatsKey);
+        await cache.KeyDeleteAsync(lockKey);
+        logger.LogError(ex, "Failed to persist booking — rolled back Redis counter and seat lock. Event: {EventId}, Seat: {SeatId}", eventId, seatId);
+        return Results.Problem("Booking could not be saved. Please try again.");
+    }
 
     logger.LogInformation("Booking created (Pending) — Event: {EventId}, Seat: {SeatId}, BookingId: {BookingId}", eventId, seatId, booking.Id);
     return Results.Ok(new { bookingId = booking.Id, userId, message = $"Seat {seatId} reserved. Proceed to payment." });

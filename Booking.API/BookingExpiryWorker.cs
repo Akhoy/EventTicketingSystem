@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+using Booking.Domain;
 using StackExchange.Redis;
 
 namespace Booking.API;
@@ -31,14 +31,14 @@ public class BookingExpiryWorker : BackgroundService
         {
             try
             {
+                // Workers are Singleton — create a new scope each cycle so IBookingRepository
+                // and its underlying DbContext have a clean, short lifetime per execution.
                 using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+                var repository = scope.ServiceProvider.GetRequiredService<IBookingRepository>();
                 var cache = _redis.GetDatabase();
 
                 var cutoff = DateTime.UtcNow - HoldWindow;
-                var expired = await db.Bookings
-                    .Where(b => b.Status == "Pending" && b.CreatedAt < cutoff)
-                    .ToListAsync(stoppingToken);
+                var expired = await repository.GetPendingBookingsOlderThan(cutoff);
 
                 foreach (var booking in expired)
                 {
@@ -52,8 +52,10 @@ public class BookingExpiryWorker : BackgroundService
                         booking.EventId, booking.SeatId, booking.Id);
                 }
 
+                // One save after the loop — EF Core tracks all the Expire() calls above,
+                // so SaveAsync flushes all of them in a single database roundtrip.
                 if (expired.Count > 0)
-                    await db.SaveChangesAsync(stoppingToken);
+                    await repository.SaveAsync();
             }
             catch (Exception ex)
             {

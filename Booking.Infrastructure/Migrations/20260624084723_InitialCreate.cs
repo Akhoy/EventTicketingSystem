@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Booking.API.Migrations
+// Namespace updated from Booking.API.Migrations — migrations moved to Infrastructure
+// because they are generated from BookingDbContext which now lives here.
+namespace Booking.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration

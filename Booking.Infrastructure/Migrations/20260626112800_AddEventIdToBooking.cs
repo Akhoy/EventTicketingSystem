@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Booking.API.Migrations
+namespace Booking.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class AddEventIdToBooking : Migration

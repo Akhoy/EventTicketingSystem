@@ -1,4 +1,4 @@
-namespace Booking.API;
+namespace Booking.Domain;
 
 // Aggregate root for a single seat booking. All business rules live here, not in Program.cs.
 public class Booking

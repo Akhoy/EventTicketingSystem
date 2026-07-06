@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>C# Language Reference</title>
+<style>
+/* ── Tokens ─────────────────────────────────────────── */
+:root {
+  --bg:           #F5F8FB;
+  --surface:      #FFFFFF;
+  --surface-2:    #EEF2F8;
+  --border:       #D3DCE8;
+  --text:         #1A2332;
+  --text-muted:   #566476;
+  --text-faint:   #8696A7;
+  --accent:       #1D6FA4;
+  --accent-dim:   #D6E8F4;
+  --warm:         #B86E12;
+  --warm-dim:     #FDF0DC;
+  --green:        #1A6B4A;
+  --green-dim:    #D4EFE3;
+  --red:          #A31E2A;
+  --red-dim:      #FAE0E2;
+  --tag-h:        14px;
+  --radius:       6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:           #0C1117;
+    --surface:      #141B24;
+    --surface-2:    #1C2635;
+    --border:       #263040;
+    --text:         #DCE8F5;
+    --text-muted:   #8CA4BC;
+    --text-faint:   #567088;
+    --accent:       #4BA3D4;
+    --accent-dim:   #102638;
+    --warm:         #E09840;
+    --warm-dim:     #221709;
+    --green:        #4AC49A;
+    --green-dim:    #061F14;
+    --red:          #F28B8B;
+    --red-dim:      #230B0C;
+  }
+}
+:root[data-theme="light"] {
+  --bg:           #F5F8FB;
+  --surface:      #FFFFFF;
+  --surface-2:    #EEF2F8;
+  --border:       #D3DCE8;
+  --text:         #1A2332;
+  --text-muted:   #566476;
+  --text-faint:   #8696A7;
+  --accent:       #1D6FA4;
+  --accent-dim:   #D6E8F4;
+  --warm:         #B86E12;
+  --warm-dim:     #FDF0DC;
+  --green:        #1A6B4A;
+  --green-dim:    #D4EFE3;
+  --red:          #A31E2A;
+  --red-dim:      #FAE0E2;
+}
+:root[data-theme="dark"] {
+  --bg:           #0C1117;
+  --surface:      #141B24;
+  --surface-2:    #1C2635;
+  --border:       #263040;
+  --text:         #DCE8F5;
+  --text-muted:   #8CA4BC;
+  --text-faint:   #567088;
+  --accent:       #4BA3D4;
+  --accent-dim:   #102638;
+  --warm:         #E09840;
+  --warm-dim:     #221709;
+  --green:        #4AC49A;
+  --green-dim:    #061F14;
+  --red:          #F28B8B;
+  --red-dim:      #230B0C;
+}
+
+/* ── Reset ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text);
+  background: var(--bg);
+  padding-bottom: 100px;
+}
+img { max-width: 100%; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+/* ── Top bar ─────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px;
+  height: 52px;
+}
+.topbar-brand {
+  font-size: 13px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent);
+}
+.topbar-nav {
+  display: flex; gap: 24px; list-style: none;
+}
+.topbar-nav a {
+  font-size: 12px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text-muted);
+  transition: color .15s;
+}
+.topbar-nav a:hover { color: var(--accent); text-decoration: none; }
+
+/* ── Page shell ──────────────────────────────────────── */
+.page { max-width: 900px; margin: 0 auto; padding: 56px 32px 0; }
+
+/* ── Cover ────────────────────────────────────────────── */
+.cover { padding-bottom: 48px; border-bottom: 1px solid var(--border); margin-bottom: 56px; }
+.cover-eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent);
+  margin-bottom: 16px;
+}
+.cover h1 {
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: 800; line-height: 1.15;
+  letter-spacing: -.02em;
+  color: var(--text);
+  text-wrap: balance;
+  margin-bottom: 16px;
+}
+.cover-sub {
+  font-size: 16px; color: var(--text-muted); max-width: 600px; line-height: 1.65;
+}
+.cover-meta {
+  display: flex; gap: 24px; margin-top: 28px; flex-wrap: wrap;
+}
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 4px;
+  background: var(--accent-dim); color: var(--accent);
+}
+
+/* ── TOC ──────────────────────────────────────────────── */
+.toc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  margin-bottom: 60px;
+  columns: 2; column-gap: 48px;
+}
+@media (max-width: 600px) { .toc { columns: 1; } }
+.toc-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-faint);
+  margin-bottom: 16px;
+  column-span: all;
+}
+.toc ol { padding-left: 18px; break-inside: avoid; }
+.toc li { margin-bottom: 6px; }
+.toc a {
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+}
+.toc a:hover { color: var(--accent); text-decoration: none; }
+
+/* ── Section ──────────────────────────────────────────── */
+.section { margin-bottom: 72px; }
+.section-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent);
+  margin-bottom: 10px;
+}
+.section > h2 {
+  font-size: 24px; font-weight: 800; letter-spacing: -.02em;
+  color: var(--text); margin-bottom: 6px;
+  text-wrap: balance;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+.section-intro {
+  color: var(--text-muted); margin-top: 16px; margin-bottom: 28px;
+  max-width: 700px;
+}
+
+h3 {
+  font-size: 16px; font-weight: 700;
+  color: var(--text); margin: 32px 0 10px;
+}
+h4 {
+  font-size: 13px; font-weight: 700;
+  letter-spacing: .03em; color: var(--text-muted);
+  text-transform: uppercase; margin: 24px 0 8px;
+}
+p { margin-bottom: 12px; }
+ul, ol { padding-left: 22px; margin-bottom: 14px; }
+li { margin-bottom: 5px; }
+strong { font-weight: 700; color: var(--text); }
+
+/* ── Inline code ─────────────────────────────────────── */
+code {
+  font-family: 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  background: var(--surface-2);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* ── Code block — always light, independent of page theme ── */
+.code-block {
+  background: #F8FAFC;
+  border: 1px solid #D1D9E6;
+  border-radius: var(--radius);
+  margin: 16px 0 24px;
+  overflow: hidden;
+}
+.code-label {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 16px;
+  background: #EDF1F7;
+  border-bottom: 1px solid #D1D9E6;
+  font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #6B7A8D;
+}
+.code-label span { display: flex; align-items: center; gap: 8px; }
+.code-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #C4CCDA; flex-shrink: 0; }
+.code-block pre {
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-family: 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px; line-height: 1.7; white-space: pre;
+  color: #1E2A38;
+  background: none;
+  margin: 0;
+}
+/* Syntax colours — VS Code Light+ palette */
+.kw  { color: #7C3AED; font-weight: 600; }   /* purple  — keywords    */
+.ty  { color: #0E7490; }                      /* teal    — types       */
+.st  { color: #166534; }                      /* green   — strings     */
+.nu  { color: #C2410C; }                      /* orange  — numbers     */
+.me  { color: #1D4ED8; }                      /* blue    — methods     */
+.cm  { color: #6B7A8D; font-style: italic; }  /* grey    — comments    */
+
+/* ── Callout cards ─────────────────────────────────────── */
+.callout {
+  display: flex; gap: 14px;
+  padding: 16px 18px; border-radius: var(--radius);
+  margin: 16px 0;
+}
+.callout-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.callout-body { font-size: 14px; line-height: 1.65; }
+.callout-body strong { display: block; margin-bottom: 3px; font-size: 13px; letter-spacing: .02em; }
+.callout.note   { background: var(--accent-dim); border-left: 3px solid var(--accent); }
+.callout.note   .callout-body strong { color: var(--accent); }
+.callout.warn   { background: var(--warm-dim);   border-left: 3px solid var(--warm); }
+.callout.warn   .callout-body strong { color: var(--warm); }
+.callout.good   { background: var(--green-dim);  border-left: 3px solid var(--green); }
+.callout.good   .callout-body strong { color: var(--green); }
+.callout.bad    { background: var(--red-dim);    border-left: 3px solid var(--red); }
+.callout.bad    .callout-body strong { color: var(--red); }
+
+/* ── Feature card ───────────────────────────────────────── */
+.feature-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin: 20px 0;
+}
+.feature-card h3 { margin-top: 0; font-size: 15px; }
+
+/* ── Compare table ─────────────────────────────────────── */
+.compare {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  margin: 16px 0 24px;
+}
+@media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+.compare-col { }
+.compare-col h4 {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; margin-bottom: 0; padding: 8px 0 6px;
+}
+.compare-col.before h4 { color: var(--red); border-bottom: 2px solid var(--red); }
+.compare-col.after  h4 { color: var(--green); border-bottom: 2px solid var(--green); }
+.compare-col .code-block { margin-top: 8px; }
+
+/* ── Table ─────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; margin: 16px 0 24px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  text-align: left; padding: 9px 14px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+td { padding: 9px 14px; border: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
+
+/* ── Footer ─────────────────────────────────────────────── */
+.footer {
+  margin-top: 80px; padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-faint);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .page { padding: 32px 20px 0; }
+  .topbar { padding: 0 20px; }
+  .topbar-nav { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-brand">C# Reference</div>
+  <nav aria-label="Sections">
+    <ul class="topbar-nav">
+      <li><a href="#types">Types</a></li>
+      <li><a href="#access">Access</a></li>
+      <li><a href="#async">Async</a></li>
+      <li><a href="#null">Null</a></li>
+      <li><a href="#linq">LINQ</a></li>
+      <li><a href="#di">DI</a></li>
+      <li><a href="#patterns">Patterns</a></li>
+    </ul>
+  </nav>
+</header>
+
+<div class="page">
+
+<div class="cover">
+  <div class="cover-eyebrow">Interview Reference · .NET 10</div>
+  <h1>C# Language Features</h1>
+  <p class="cover-sub">Every C# feature used in the Ticketing System — from access modifiers to async patterns to dependency injection — with real before/after examples from the codebase.</p>
+  <div class="cover-meta">
+    <span class="badge">C# 13 / .NET 10</span>
+    <span class="badge">Booking.API · Domain · Infrastructure</span>
+    <span class="badge">July 2026</span>
+  </div>
+</div>
+
+<div class="toc">
+  <div class="toc-title">Contents</div>
+  <ol>
+    <li><a href="#types">Types — class, interface, record</a></li>
+    <li><a href="#access">Access Modifiers &amp; Properties</a></li>
+    <li><a href="#constructors">Constructors &amp; Object Creation</a></li>
+    <li><a href="#methods">Methods — expression-bodied, extension</a></li>
+    <li><a href="#namespaces">Namespaces &amp; Using Directives</a></li>
+    <li><a href="#generics">Generics</a></li>
+    <li><a href="#async">Async / Await</a></li>
+    <li><a href="#null">Null Safety</a></li>
+    <li><a href="#linq">LINQ &amp; Collections</a></li>
+    <li><a href="#exceptions">Exception Handling</a></li>
+    <li><a href="#di">Dependency Injection — IServiceCollection, IServiceProvider, constructor injection</a></li>
+    <li><a href="#toplevel">Top-Level Statements &amp; Program.cs</a></li>
+    <li><a href="#patterns">Pattern Matching</a></li>
+    <li><a href="#hosted">BackgroundService &amp; Hosted Services</a></li>
+    <li><a href="#misc">Miscellaneous — var, string interpolation, using declarations</a></li>
+  </ol>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 1. TYPES                                        -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="types">
+  <div class="section-label">Section 1</div>
+  <h2>Types — class, interface, record</h2>
+  <p class="section-intro">C# is a nominally typed language. Every value has a declared type. The main type kinds you'll use are <code>class</code>, <code>interface</code>, <code>record</code>, and <code>struct</code>.</p>
+
+  <h3>class</h3>
+  <p>A reference type. Instances live on the heap. Two variables can point to the same object. Classes support inheritance, encapsulation, and mutable state.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Domain/Booking.cs</span></div>
+    <pre><span class="kw">public class</span> <span class="ty">Booking</span>
+{
+    <span class="kw">public</span> <span class="ty">Guid</span> Id { <span class="kw">get</span>; <span class="kw">private set</span>; }
+    <span class="kw">public</span> <span class="ty">string</span> Status { <span class="kw">get</span>; <span class="kw">private set</span>; } = <span class="st">"Pending"</span>;
+
+    <span class="kw">private</span> <span class="ty">Booking</span>() { }     <span class="cm">// private constructor — must use Create()</span>
+
+    <span class="kw">public static</span> <span class="ty">Booking</span> <span class="me">Create</span>(<span class="ty">string</span> eventId, <span class="ty">string</span> seatId, <span class="ty">string</span> userId)
+        => <span class="kw">new</span> <span class="ty">Booking</span> { Id = <span class="ty">Guid</span>.<span class="me">NewGuid</span>(), ... };
+}</pre>
+  </div>
+
+  <h3>interface</h3>
+  <p>A contract — a list of members a type must implement. Contains no implementation (except default interface methods, rarely used). The cornerstone of dependency inversion: code against the interface, swap the implementation.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Domain/IBookingRepository.cs</span></div>
+    <pre><span class="kw">public interface</span> <span class="ty">IBookingRepository</span>
+{
+    <span class="ty">Task</span> <span class="me">AddAsync</span>(<span class="ty">Booking</span> booking);
+    <span class="ty">Task</span> <span class="me">SaveAsync</span>();
+    <span class="ty">Task</span>&lt;<span class="ty">Booking</span>?&gt; <span class="me">GetByIdAsync</span>(<span class="ty">Guid</span> id);
+    <span class="ty">Task</span>&lt;<span class="ty">List</span>&lt;<span class="ty">Booking</span>&gt;&gt; <span class="me">GetPendingBookingsOlderThan</span>(<span class="ty">DateTime</span> cutoff);
+    <span class="ty">Task</span>&lt;<span class="ty">List</span>&lt;<span class="ty">Booking</span>&gt;&gt; <span class="me">GetConfirmedUnpublishedBookings</span>();
+}</pre>
+  </div>
+  <p><code>BookingRepository</code> in Infrastructure implements this. Program.cs and workers only reference <code>IBookingRepository</code> — they never know it's EF Core underneath.</p>
+
+  <h3>record</h3>
+  <p>A reference type optimised for immutable data. Equality is value-based (two records with the same properties are equal). Automatically generates <code>ToString()</code>, <code>Equals()</code>, and a copy constructor.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/BookingEvent.cs</span></div>
+    <pre><span class="cm">// Positional record — constructor + properties generated automatically</span>
+<span class="kw">public record</span> <span class="ty">BookingEvent</span>(<span class="ty">string</span> EventId, <span class="ty">string</span> SeatId, <span class="ty">string</span> UserId);</pre>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Type</th><th>Equality</th><th>Mutable?</th><th>Use when</th></tr></thead>
+      <tbody>
+        <tr><td><code>class</code></td><td>Reference (same object?)</td><td>Yes</td><td>Entities with identity and behaviour — <code>Booking</code></td></tr>
+        <tr><td><code>record</code></td><td>Value (same data?)</td><td>By default, no</td><td>DTOs, messages, value objects — <code>BookingEvent</code></td></tr>
+        <tr><td><code>struct</code></td><td>Value</td><td>Yes (avoid mutable structs)</td><td>Small value types — <code>DateTime</code>, <code>Guid</code>, <code>TimeSpan</code></td></tr>
+        <tr><td><code>interface</code></td><td>—</td><td>—</td><td>Contracts — <code>IBookingRepository</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 2. ACCESS MODIFIERS                             -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="access">
+  <div class="section-label">Section 2</div>
+  <h2>Access Modifiers &amp; Properties</h2>
+  <p class="section-intro">Access modifiers control what code can see and change a member. In DDD they enforce the aggregate root: nothing outside the class can assign to <code>Status</code>.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Modifier</th><th>Visible to</th></tr></thead>
+      <tbody>
+        <tr><td><code>public</code></td><td>Everyone — any assembly, any code</td></tr>
+        <tr><td><code>private</code></td><td>Only the declaring class itself</td></tr>
+        <tr><td><code>protected</code></td><td>The class and any subclass</td></tr>
+        <tr><td><code>internal</code></td><td>Any code in the same assembly (.dll)</td></tr>
+        <tr><td><code>private protected</code></td><td>Subclasses in the same assembly</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>private set on properties</h3>
+  <p>A property can have different access on its getter and setter. <code>private set</code> means any code can read, but only the class itself can write. This is what makes the aggregate root pattern enforceable at compile time.</p>
+
+  <div class="compare">
+    <div class="compare-col before">
+      <h4>Anemic — no protection</h4>
+      <div class="code-block">
+        <pre><span class="kw">public string</span> Status { <span class="kw">get</span>; <span class="kw">set</span>; }
+
+<span class="cm">// Anyone can do this — no rules</span>
+booking.Status = <span class="st">"Confirmed"</span>;
+booking.Status = <span class="st">"Banana"</span>; <span class="cm">// compiles fine</span></pre>
+      </div>
+    </div>
+    <div class="compare-col after">
+      <h4>Aggregate Root — compiler enforced</h4>
+      <div class="code-block">
+        <pre><span class="kw">public string</span> Status { <span class="kw">get</span>; <span class="kw">private set</span>; }
+
+<span class="cm">// This is a compile error outside the class:</span>
+booking.Status = <span class="st">"Confirmed"</span>; <span class="cm">// ❌ CS0272</span>
+booking.<span class="me">Confirm</span>();             <span class="cm">// ✅ only valid path</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>EF Core bypass</strong>
+      EF Core uses reflection to set <code>private set</code> properties when materialising objects from the database. Reflection bypasses all access modifiers — <code>private</code>, <code>protected</code>, all of them. EF Core is the framework, not your application code, so this is intentional. Your code still can't bypass it — only the framework can.
+    </div>
+  </div>
+
+  <h3>init — write-once properties (C# 9+)</h3>
+  <p><code>init</code> allows a property to be set during object initialisation but never again. Unlike <code>private set</code>, it can be set from outside the class — but only in an object initialiser or constructor.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="kw">public record</span> <span class="ty">BookingEvent</span>
+{
+    <span class="kw">public string</span> EventId { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="ty">string</span>.Empty;
+}
+
+<span class="kw">var</span> evt = <span class="kw">new</span> <span class="ty">BookingEvent</span> { EventId = <span class="st">"evt-1"</span> }; <span class="cm">// ✅ object initialiser</span>
+evt.EventId = <span class="st">"evt-2"</span>;                              <span class="cm">// ❌ compile error after init</span></pre>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 3. CONSTRUCTORS & OBJECT CREATION              -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="constructors">
+  <div class="section-label">Section 3</div>
+  <h2>Constructors &amp; Object Creation</h2>
+  <p class="section-intro">How an object is created is as important as what it does. The static factory method pattern replaces <code>new</code> with an expressive, rules-enforcing entry point.</p>
+
+  <h3>Private constructor</h3>
+  <p>A constructor marked <code>private</code> prevents any external code from calling <code>new Booking()</code>. All creation must go through the designated path.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Domain/Booking.cs</span></div>
+    <pre><span class="kw">private</span> <span class="ty">Booking</span>() { }   <span class="cm">// EF Core calls this via reflection</span>
+                           <span class="cm">// Your code cannot call it at all</span></pre>
+  </div>
+
+  <h3>Static factory method</h3>
+  <p>A <code>public static</code> method on the class that creates and returns an instance. It has a name (<code>Create</code>), enforces valid initial state, and is the only path into the object.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Domain/Booking.cs</span></div>
+    <pre><span class="kw">public static</span> <span class="ty">Booking</span> <span class="me">Create</span>(<span class="ty">string</span> eventId, <span class="ty">string</span> seatId, <span class="ty">string</span> userId)
+{
+    <span class="kw">return new</span> <span class="ty">Booking</span>          <span class="cm">// new is only called from inside the class</span>
+    {
+        Id        = <span class="ty">Guid</span>.<span class="me">NewGuid</span>(),
+        EventId   = eventId,
+        SeatId    = seatId,
+        UserId    = userId,
+        Status    = <span class="st">"Pending"</span>,    <span class="cm">// every booking starts Pending — always</span>
+        CreatedAt = <span class="ty">DateTime</span>.UtcNow
+    };
+}</pre>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>new Booking(...)</th><th>Booking.Create(...)</th></tr></thead>
+      <tbody>
+        <tr><td>Has a name</td><td>No — just <code>new</code></td><td>Yes — <code>Create</code> expresses intent</td></tr>
+        <tr><td>Enforces initial state</td><td>No — you set fields yourself</td><td>Yes — Status is always "Pending"</td></tr>
+        <tr><td>Can be prevented externally</td><td>No — can't make <code>new</code> private</td><td>Yes — private constructor blocks <code>new</code></td></tr>
+        <tr><td>Can return null</td><td>No</td><td>Yes — useful for conditional creation</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Object initialiser</h3>
+  <p>Sets properties by name after construction, in braces. Only works with <code>public set</code> or <code>init</code> properties.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="kw">var</span> booking = <span class="kw">new</span> <span class="ty">Booking</span>
+{
+    Id        = <span class="ty">Guid</span>.<span class="me">NewGuid</span>(),
+    EventId   = <span class="st">"evt-coldplay"</span>,
+    Status    = <span class="st">"Pending"</span>
+};
+<span class="cm">// Equivalent to setting each property on the line after new</span></pre>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 4. METHODS                                      -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="methods">
+  <div class="section-label">Section 4</div>
+  <h2>Methods — expression-bodied, extension, async</h2>
+
+  <h3>Expression-bodied members (C# 6+)</h3>
+  <p>When a method or property is a single expression, replace the body with <code>=&gt;</code>. No <code>{ return ...; }</code> needed. Clean for one-liners.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/BookingRepository.cs</span></div>
+    <pre><span class="cm">// Method body</span>
+<span class="kw">public async</span> <span class="ty">Task</span>&lt;<span class="ty">Booking</span>?&gt; <span class="me">GetByIdAsync</span>(<span class="ty">Guid</span> id) =>
+    <span class="kw">await</span> _context.Bookings.<span class="me">FindAsync</span>(id);
+
+<span class="cm">// Property getter</span>
+<span class="kw">public</span> <span class="ty">DbSet</span>&lt;<span class="ty">Booking</span>&gt; Bookings => <span class="me">Set</span>&lt;<span class="ty">Booking</span>&gt;();
+
+<span class="cm">// Constructor shorthand</span>
+<span class="kw">public</span> <span class="ty">BookingRepository</span>(<span class="ty">BookingDbContext</span> context) => _context = context;</pre>
+  </div>
+
+  <h3>Extension methods</h3>
+  <p>Add methods to existing types without modifying or subclassing them. Defined as <code>static</code> methods in a <code>static</code> class, with <code>this T</code> as the first parameter. Called as if they're instance methods on <code>T</code>.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/InfrastructureExtensions.cs</span></div>
+    <pre><span class="kw">public static class</span> <span class="ty">InfrastructureExtensions</span>
+{
+    <span class="cm">// 'this IServiceCollection' makes this an extension on IServiceCollection</span>
+    <span class="kw">public static</span> <span class="ty">IServiceCollection</span> <span class="me">AddBookingInfrastructure</span>(
+        <span class="kw">this</span> <span class="ty">IServiceCollection</span> services, <span class="ty">string</span> connectionString)
+    {
+        services.<span class="me">AddDbContext</span>&lt;<span class="ty">BookingDbContext</span>&gt;(opts => opts.<span class="me">UseSqlServer</span>(connectionString));
+        services.<span class="me">AddScoped</span>&lt;<span class="ty">IBookingRepository</span>, <span class="ty">BookingRepository</span>&gt;();
+        <span class="kw">return</span> services;
+    }
+}
+
+<span class="cm">// Called as if it belongs to IServiceCollection:</span>
+builder.Services.<span class="me">AddBookingInfrastructure</span>(connectionString);</pre>
+  </div>
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Where they're used everywhere in .NET</strong>
+      <code>AddDbContext&lt;T&gt;()</code>, <code>AddScoped&lt;T&gt;()</code>, <code>MapPost()</code>, <code>ToListAsync()</code>, <code>UseSqlServer()</code> — these are all extension methods. The pattern of returning <code>this</code> (the same instance) is called a fluent API.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 5. NAMESPACES                                   -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="namespaces">
+  <div class="section-label">Section 5</div>
+  <h2>Namespaces &amp; Using Directives</h2>
+  <p class="section-intro">Namespaces organise types into named scopes. <code>using</code> imports a namespace so you can refer to its types by short name instead of fully qualifying them.</p>
+
+  <h3>File-scoped namespace (C# 10+)</h3>
+  <p>One namespace per file — the old curly-brace syntax needed a level of indentation for the entire file. File-scoped applies to everything in the file.</p>
+  <div class="compare">
+    <div class="compare-col before">
+      <h4>Old syntax</h4>
+      <div class="code-block">
+        <pre><span class="kw">namespace</span> <span class="ty">Booking.Domain</span>
+{
+    <span class="kw">public class</span> <span class="ty">Booking</span>
+    {
+        <span class="cm">// indented inside namespace</span>
+    }
+}</pre>
+      </div>
+    </div>
+    <div class="compare-col after">
+      <h4>File-scoped (C# 10+)</h4>
+      <div class="code-block">
+        <pre><span class="kw">namespace</span> Booking.Domain; <span class="cm">// applies to whole file</span>
+
+<span class="kw">public class</span> <span class="ty">Booking</span>
+{
+    <span class="cm">// no extra indentation</span>
+}</pre>
+      </div>
+    </div>
+  </div>
+
+  <h3>using directive vs global namespace</h3>
+  <p>Types in different namespaces within the same assembly still need <code>using</code> to be referenced by short name. Program.cs uses top-level statements — the C# compiler places that code in the <strong>global (root) namespace</strong>. Workers declared in <code>namespace Booking.API;</code> require <code>using Booking.API;</code> in Program.cs, even though they're in the same project.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre><span class="kw">using</span> Booking.API;           <span class="cm">// OutboxRelayWorker, BookingExpiryWorker</span>
+<span class="kw">using</span> Booking.Domain;        <span class="cm">// IBookingRepository, Booking</span>
+<span class="kw">using</span> Booking.Infrastructure; <span class="cm">// AddBookingInfrastructure()</span>
+<span class="kw">using</span> StackExchange.Redis;
+<span class="kw">using</span> Serilog;
+
+<span class="cm">// Top-level statements: no namespace declaration</span>
+<span class="cm">// This code is in the global namespace.</span>
+<span class="kw">var</span> builder = <span class="ty">WebApplication</span>.<span class="me">CreateBuilder</span>(args);</pre>
+  </div>
+
+  <h3>Implicit usings (.NET 6+)</h3>
+  <p>The SDK automatically generates <code>using</code> directives for the most common namespaces (<code>System</code>, <code>System.Collections.Generic</code>, <code>System.Threading.Tasks</code>, etc.) so you don't have to write them in every file. Enabled via <code>&lt;ImplicitUsings&gt;enable&lt;/ImplicitUsings&gt;</code> in the csproj.</p>
+
+  <h3>Fully qualified names</h3>
+  <p>When two namespaces define a type with the same name, you can fully qualify to disambiguate:</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre><span class="cm">// Both Booking.API and Booking.Domain exist — qualify the one we mean</span>
+<span class="kw">var</span> booking = <span class="ty">Booking.Domain.Booking</span>.<span class="me">Create</span>(eventId, seatId, userId);</pre>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 6. GENERICS                                    -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="generics">
+  <div class="section-label">Section 6</div>
+  <h2>Generics</h2>
+  <p class="section-intro">Generics allow types and methods to be parameterised over other types. Write once, work safely with any type — without casting.</p>
+
+  <h3>Generic types and methods</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="cm">// List&lt;T&gt; — T is the type parameter, filled in at the call site</span>
+<span class="ty">List</span>&lt;<span class="ty">Booking</span>&gt; bookings = <span class="kw">new</span>();       <span class="cm">// T = Booking</span>
+<span class="ty">List</span>&lt;<span class="ty">string</span>&gt;  names    = <span class="kw">new</span>();       <span class="cm">// T = string</span>
+
+<span class="cm">// Task&lt;T&gt; — T is the result type of the async operation</span>
+<span class="ty">Task</span>&lt;<span class="ty">Booking</span>?&gt; <span class="me">GetByIdAsync</span>(<span class="ty">Guid</span> id);   <span class="cm">// returns a Booking (or null)</span>
+<span class="ty">Task</span>          <span class="me">SaveAsync</span>();              <span class="cm">// returns nothing</span>
+
+<span class="cm">// Generic method</span>
+services.<span class="me">AddScoped</span>&lt;<span class="ty">IBookingRepository</span>, <span class="ty">BookingRepository</span>&gt;();
+<span class="cm">//          TService = IBookingRepository</span>
+<span class="cm">//          TImplementation = BookingRepository</span></pre>
+  </div>
+
+  <h3>Constraints</h3>
+  <p>Type parameters can be constrained to require a type that implements an interface, inherits a class, or has a parameterless constructor.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="cm">// T must implement IDisposable</span>
+<span class="kw">public static void</span> <span class="me">UseAndDispose</span>&lt;<span class="ty">T</span>&gt;(<span class="ty">T</span> obj) <span class="kw">where</span> T : <span class="ty">IDisposable</span>
+{
+    obj.<span class="me">Dispose</span>();
+}
+
+<span class="cm">// AddDbContext uses: where TContext : DbContext</span>
+services.<span class="me">AddDbContext</span>&lt;<span class="ty">BookingDbContext</span>&gt;(...);</pre>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 7. ASYNC / AWAIT                               -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="async">
+  <div class="section-label">Section 7</div>
+  <h2>Async / Await</h2>
+  <p class="section-intro">Async/await lets the thread yield while waiting for I/O (database, network, Redis) and resume when the result is ready. No thread is blocked — it can serve other requests instead.</p>
+
+  <h3>Task, Task&lt;T&gt;, async, await</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/BookingRepository.cs</span></div>
+    <pre><span class="cm">// async: marks the method as asynchronous</span>
+<span class="cm">// Task&lt;List&lt;Booking&gt;&gt;: returns a list when done</span>
+<span class="kw">public async</span> <span class="ty">Task</span>&lt;<span class="ty">List</span>&lt;<span class="ty">Booking</span>&gt;&gt; <span class="me">GetPendingBookingsOlderThan</span>(<span class="ty">DateTime</span> cutoff)
+{
+    <span class="cm">// await: pause here, release the thread, resume when ToListAsync is done</span>
+    <span class="kw">return await</span> _context.Bookings
+        .<span class="me">Where</span>(b => b.Status == <span class="st">"Pending"</span> &amp;&amp; b.CreatedAt &lt; cutoff)
+        .<span class="me">ToListAsync</span>();
+}
+
+<span class="cm">// Task (no T): no return value, just signals completion</span>
+<span class="kw">public async</span> <span class="ty">Task</span> <span class="me">SaveAsync</span>() =>
+    <span class="kw">await</span> _context.<span class="me">SaveChangesAsync</span>();</pre>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Return type</th><th>Meaning</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td><code>void</code></td><td>Fire and forget — caller can't await. Avoid in async code.</td><td>Event handlers only</td></tr>
+        <tr><td><code>Task</code></td><td>Async, no return value. Caller can await completion.</td><td><code>SaveAsync()</code></td></tr>
+        <tr><td><code>Task&lt;T&gt;</code></td><td>Async, returns T when done.</td><td><code>GetByIdAsync()</code> returns <code>Task&lt;Booking?&gt;</code></td></tr>
+        <tr><td><code>ValueTask&lt;T&gt;</code></td><td>Like Task&lt;T&gt; but avoids heap allocation when result is already available.</td><td>High-perf hot paths</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>CancellationToken</h3>
+  <p>A signal that the caller wants to cancel the operation. Workers receive it from the host — when the app shuts down, the host signals the token and workers stop gracefully.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/BookingExpiryWorker.cs</span></div>
+    <pre><span class="cm">// stoppingToken is cancelled when the host shuts down</span>
+<span class="kw">protected override async</span> <span class="ty">Task</span> <span class="me">ExecuteAsync</span>(<span class="ty">CancellationToken</span> stoppingToken)
+{
+    <span class="kw">while</span> (!stoppingToken.IsCancellationRequested)
+    {
+        <span class="cm">// Passes token to Delay — throws OperationCanceledException on shutdown</span>
+        <span class="kw">await</span> <span class="ty">Task</span>.<span class="me">Delay</span>(<span class="ty">TimeSpan</span>.<span class="me">FromSeconds</span>(<span class="nu">30</span>), stoppingToken);
+    }
+}</pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Don't call .Result or .Wait() on a Task</strong>
+      Blocking on an async method (<code>task.Result</code>, <code>task.Wait()</code>) can deadlock in ASP.NET Core. Always <code>await</code> — propagate async all the way up.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 8. NULL SAFETY                                  -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="null">
+  <div class="section-label">Section 8</div>
+  <h2>Null Safety</h2>
+  <p class="section-intro">C# 8 introduced nullable reference types. The compiler tracks nullability and warns when you might dereference null. Enabled with <code>&lt;Nullable&gt;enable&lt;/Nullable&gt;</code> in the csproj.</p>
+
+  <h3>Nullable reference types</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="ty">string</span>  name    = <span class="kw">null</span>; <span class="cm">// ⚠️ warning: non-nullable assigned null</span>
+<span class="ty">string</span>? nullName = <span class="kw">null</span>; <span class="cm">// ✅ explicitly nullable</span>
+
+<span class="cm">// Repository: returns Booking or null if not found</span>
+<span class="ty">Task</span>&lt;<span class="ty">Booking</span>?&gt; <span class="me">GetByIdAsync</span>(<span class="ty">Guid</span> id);
+
+<span class="cm">// Caller must check before using</span>
+<span class="kw">var</span> booking = <span class="kw">await</span> repository.<span class="me">GetByIdAsync</span>(bookingId);
+<span class="kw">if</span> (booking <span class="kw">is null</span>)
+    <span class="kw">return</span> <span class="ty">Results</span>.<span class="me">NotFound</span>();</pre>
+  </div>
+
+  <h3>Null-forgiving operator !</h3>
+  <p>Tells the compiler "I know this isn't null, don't warn." Use only when you're certain — it disables the null check, it doesn't add one.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre><span class="cm">// GetConnectionString returns string? but we know it's in appsettings</span>
+builder.Services.<span class="me">AddBookingInfrastructure</span>(
+    builder.Configuration.<span class="me">GetConnectionString</span>(<span class="st">"SqlServer"</span>)!);</pre>
+  </div>
+
+  <h3>Null-conditional operator ?.</h3>
+  <p>Returns null instead of throwing if the left side is null. Short-circuits the entire chain.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="ty">string</span>? upper = user?.Name?.<span class="me">ToUpper</span>();
+<span class="cm">// If user is null → upper = null</span>
+<span class="cm">// If user.Name is null → upper = null</span>
+<span class="cm">// Otherwise → upper = "JOHN"</span></pre>
+  </div>
+
+  <h3>Null-coalescing operator ??</h3>
+  <p>Returns the left side if not null, otherwise the right side.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="ty">string</span> name = user?.Name ?? <span class="st">"Anonymous"</span>;
+<span class="cm">// If user or user.Name is null → "Anonymous"</span>
+
+<span class="ty">string</span>? seqUrl = builder.Configuration[<span class="st">"SeqUrl"</span>];
+<span class="kw">if</span> (!<span class="ty">string</span>.<span class="me">IsNullOrEmpty</span>(seqUrl))
+    configuration.<span class="me">WriteTo</span>.<span class="me">Seq</span>(seqUrl);  <span class="cm">// compiler knows seqUrl is non-null here</span></pre>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 9. LINQ & COLLECTIONS                          -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="linq">
+  <div class="section-label">Section 9</div>
+  <h2>LINQ &amp; Collections</h2>
+  <p class="section-intro">LINQ (Language Integrated Query) provides a uniform syntax for querying any data source: in-memory collections, SQL via EF Core, XML. Most methods accept lambda expressions and are extension methods on <code>IEnumerable&lt;T&gt;</code> or <code>IQueryable&lt;T&gt;</code>.</p>
+
+  <h3>Lambda expressions</h3>
+  <p>An anonymous function written inline. The <code>=&gt;</code> separates parameters from the body.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="cm">// (parameter) => expression</span>
+b => b.Status == <span class="st">"Pending"</span>
+<span class="cm">// b is the input, b.Status == "Pending" is the boolean result</span>
+
+<span class="cm">// Multiple parameters</span>
+(a, b) => a + b
+
+<span class="cm">// Block body</span>
+b => {
+    <span class="kw">var</span> cutoff = <span class="ty">DateTime</span>.UtcNow.AddMinutes(-<span class="nu">5</span>);
+    <span class="kw">return</span> b.CreatedAt &lt; cutoff;
+}</pre>
+  </div>
+
+  <h3>Key LINQ methods in the codebase</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/BookingRepository.cs</span></div>
+    <pre><span class="cm">// Where — filter rows matching the predicate</span>
+_context.Bookings
+    .<span class="me">Where</span>(b => b.Status == <span class="st">"Pending"</span> &amp;&amp; b.CreatedAt &lt; cutoff)
+
+<span class="cm">// ToListAsync — materialise to List&lt;T&gt;, hits the DB</span>
+.<span class="me">ToListAsync</span>()
+
+<span class="cm">// FindAsync — look up by primary key, checks the change tracker first</span>
+_context.Bookings.<span class="me">FindAsync</span>(id)
+
+<span class="cm">// Count — number of items in a List</span>
+<span class="kw">if</span> (expired.Count > <span class="nu">0</span>)
+    <span class="kw">await</span> repository.<span class="me">SaveAsync</span>();</pre>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>IEnumerable vs IQueryable</strong>
+      <code>Where</code> on an <code>IQueryable&lt;T&gt;</code> (EF Core) builds a SQL query — the filter runs in the database. <code>Where</code> on an <code>IEnumerable&lt;T&gt;</code> (in-memory list) runs in C#, loading all rows first. Always use <code>IQueryable</code> with EF Core for filtered queries.
+    </div>
+  </div>
+
+  <h3>Collection types</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Type</th><th>Characteristics</th><th>When to use</th></tr></thead>
+      <tbody>
+        <tr><td><code>List&lt;T&gt;</code></td><td>Ordered, indexed, resizable</td><td>Most common. Return from repositories.</td></tr>
+        <tr><td><code>T[]</code> (array)</td><td>Fixed size, fastest read</td><td>When size is known upfront</td></tr>
+        <tr><td><code>IEnumerable&lt;T&gt;</code></td><td>Read-only sequence, lazy</td><td>Method signatures — most flexible</td></tr>
+        <tr><td><code>IReadOnlyList&lt;T&gt;</code></td><td>Read-only, indexed</td><td>Returning collections that callers shouldn't mutate</td></tr>
+        <tr><td><code>Dictionary&lt;K,V&gt;</code></td><td>Key-value, O(1) lookup</td><td>Lookups by key</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 10. EXCEPTIONS                                  -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="exceptions">
+  <div class="section-label">Section 10</div>
+  <h2>Exception Handling</h2>
+
+  <h3>throw in domain methods</h3>
+  <p>Throwing an exception from a domain method signals a genuine problem — a state transition that violates a business rule. The caller catches it and maps it to an HTTP response.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Domain/Booking.cs</span></div>
+    <pre><span class="kw">public void</span> <span class="me">Confirm</span>()
+{
+    <span class="kw">if</span> (Status == <span class="st">"Confirmed"</span>) <span class="kw">return</span>;         <span class="cm">// idempotent</span>
+    <span class="kw">if</span> (Status != <span class="st">"Pending"</span>)
+        <span class="kw">throw new</span> <span class="ty">InvalidOperationException</span>(
+            $<span class="st">"Cannot confirm a {Status} booking."</span>);  <span class="cm">// caught by endpoint</span>
+    Status = <span class="st">"Confirmed"</span>;
+}</pre>
+  </div>
+
+  <h3>try/catch in endpoints and workers</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre><span class="kw">try</span>
+{
+    booking.<span class="me">Confirm</span>();
+    <span class="kw">await</span> repository.<span class="me">SaveAsync</span>();
+}
+<span class="kw">catch</span> (<span class="ty">InvalidOperationException</span> ex)     <span class="cm">// specific — catches domain errors</span>
+{
+    <span class="kw">return</span> <span class="ty">Results</span>.<span class="me">Conflict</span>(<span class="kw">new</span> { message = ex.Message });
+}
+
+<span class="cm">// Workers use a broad catch to prevent crash loops</span>
+<span class="kw">catch</span> (<span class="ty">Exception</span> ex)                     <span class="cm">// broad — catches anything</span>
+{
+    _logger.<span class="me">LogError</span>(ex, <span class="st">"Expiry sweep failed, will retry"</span>);
+}</pre>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Exception hierarchy</strong>
+      <code>Exception</code> is the base. <code>SystemException</code> covers CLR errors. <code>ApplicationException</code> was intended for user code — avoid it, just throw specific types like <code>InvalidOperationException</code>, <code>ArgumentException</code>, <code>ArgumentNullException</code>, or your own custom exceptions that inherit from <code>Exception</code>.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 11. DEPENDENCY INJECTION                        -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="di">
+  <div class="section-label">Section 11</div>
+  <h2>Dependency Injection</h2>
+  <p class="section-intro">Dependency Injection (DI) is a pattern where an object receives its dependencies from the outside rather than creating them itself. ASP.NET Core has a built-in DI container that manages object creation, wiring, and lifetime automatically.</p>
+
+  <h3>The two interfaces — IServiceCollection vs IServiceProvider</h3>
+  <p>These are two completely separate roles, used at different times in the application lifecycle.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>IServiceCollection</th><th>IServiceProvider</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Analogy</strong></td>
+          <td>Recipe book — defines what can be made and how</td>
+          <td>Chef — actually makes things on demand</td>
+        </tr>
+        <tr>
+          <td><strong>Register</strong></td>
+          <td>You <em>register</em> a service by calling <code>AddScoped</code> / <code>AddSingleton</code> / <code>AddTransient</code>. This writes an entry into the collection: "when someone asks for <code>IBookingRepository</code>, create a <code>BookingRepository</code> with Scoped lifetime." Nothing is constructed yet — registering is just writing a recipe.</td>
+          <td>Not applicable — <code>IServiceProvider</code> does not register. Registration is closed once <code>builder.Build()</code> is called.</td>
+        </tr>
+        <tr>
+          <td><strong>Resolve</strong></td>
+          <td>Not applicable — <code>IServiceCollection</code> cannot resolve. It only stores the recipes.</td>
+          <td><em>Resolving</em> is the act of looking up a registered type and constructing the object (and all its dependencies). When a request arrives and the handler declares <code>IBookingRepository repository</code>, the provider <em>resolves</em> it: looks up the recipe, sees it needs a <code>BookingDbContext</code>, resolves that too, then builds the chain and hands the final object to the handler. The word "resolve" is borrowed from compiler terminology. When you write <code>BookingRepository</code> in C# code, that name is just a symbol — a string of characters. The compiler must <em>resolve</em> it: check the <code>using</code> directives at the top of the file and scan the referenced assemblies (the compiled DLLs the project depends on) to find the declaration — the <code>public class BookingRepository { ... }</code> block. That declaration is the type definition: it is where the compiler learns what fields, methods, and constructors <code>BookingRepository</code> actually has. Once found, every place in your source where you wrote <code>BookingRepository</code> gets linked to that declaration. That linking step — name to declaration — is resolution. Four terms in plain English: <strong>symbol</strong> — a name written in source code (e.g., <code>BookingRepository</code>); <strong>type definition</strong> — the <code>public class BookingRepository { ... }</code> declaration that tells the compiler what the type contains; <strong>resolution</strong> — figuring out which declaration a symbol refers to; <strong>call site / bind</strong> — the exact line of code where the symbol is used, and the act of connecting that usage to the definition. If the name is ambiguous or missing, you get a CS0246 "type not found" error — the compiler couldn't resolve the symbol. The DI container does the same thing at runtime: <code>IBookingRepository</code> is the symbol, <code>BookingRepository</code> is the definition, and the <code>ServiceDescriptor</code> lookup is the resolution step that binds them.</td>
+        </tr>
+        <tr>
+          <td><strong>When used</strong></td>
+          <td>Startup only — before the app starts accepting requests</td>
+          <td>Runtime — during every request and every worker cycle</td>
+        </tr>
+        <tr>
+          <td><strong>How accessed</strong></td>
+          <td><code>builder.Services</code></td>
+          <td>Via constructor injection, or <code>scope.ServiceProvider</code> in workers</td>
+        </tr>
+        <tr>
+          <td><strong>What it holds</strong></td>
+          <td>A list of <code>ServiceDescriptor</code> entries (type → implementation → lifetime)</td>
+          <td>Built from IServiceCollection via <code>builder.Build()</code> — you never call this yourself</td>
+        </tr>
+        <tr>
+          <td><strong>In this project</strong></td>
+          <td><code>builder.Services.AddBookingInfrastructure(...)</code> registers DbContext + IBookingRepository</td>
+          <td>Every HTTP request: container resolves <code>IBookingRepository</code> into the handler automatically</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs — the two phases</span></div>
+    <pre><span class="cm">// ── PHASE 1: REGISTRATION (IServiceCollection) ─────────────────</span>
+<span class="cm">// builder.Services IS the IServiceCollection.</span>
+<span class="cm">// Everything here is just adding entries to a list.</span>
+<span class="kw">var</span> builder = <span class="ty">WebApplication</span>.<span class="me">CreateBuilder</span>(args);
+
+builder.Services.<span class="me">AddSingleton</span>&lt;<span class="ty">IConnectionMultiplexer</span>&gt;(redis);
+builder.Services.<span class="me">AddBookingInfrastructure</span>(connectionString);   <span class="cm">// our extension method</span>
+builder.Services.<span class="me">AddHostedService</span>&lt;<span class="ty">BookingExpiryWorker</span>&gt;();
+
+<span class="cm">// ── PHASE 2: BUILD (IServiceCollection → IServiceProvider) ─────</span>
+<span class="cm">// builder.Build() freezes the registrations and creates the IServiceProvider.</span>
+<span class="cm">// After this line you can no longer register services.</span>
+<span class="kw">var</span> app = builder.<span class="me">Build</span>();   <span class="cm">// internally calls serviceCollection.BuildServiceProvider()</span>
+
+<span class="cm">// ── PHASE 3: RESOLUTION (IServiceProvider at runtime) ──────────</span>
+<span class="cm">// The container resolves services automatically for every request.</span>
+app.<span class="me">MapPost</span>(<span class="st">"/book/{eventId}/{seatId}"</span>, <span class="kw">async</span> (<span class="ty">IBookingRepository</span> repository) => { ... });
+
+app.<span class="me">Run</span>();</pre>
+  </div>
+
+  <h3>ServiceDescriptor — what a registration actually stores</h3>
+  <p>Under the hood, every <code>AddScoped&lt;TService, TImplementation&gt;()</code> call creates a <code>ServiceDescriptor</code> and appends it to the list. It records three things:</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept — what AddScoped does internally</span></div>
+    <pre><span class="cm">// This call:</span>
+services.<span class="me">AddScoped</span>&lt;<span class="ty">IBookingRepository</span>, <span class="ty">BookingRepository</span>&gt;();
+
+<span class="cm">// Creates and stores this descriptor:</span>
+<span class="kw">new</span> <span class="ty">ServiceDescriptor</span>(
+    serviceType:        <span class="kw">typeof</span>(<span class="ty">IBookingRepository</span>),   <span class="cm">// what callers ask for</span>
+    implementationType: <span class="kw">typeof</span>(<span class="ty">BookingRepository</span>),     <span class="cm">// what gets created</span>
+    lifetime:           <span class="ty">ServiceLifetime</span>.Scoped         <span class="cm">// how long it lives</span>
+)</pre>
+  </div>
+  <p>When code asks for <code>IBookingRepository</code>, the provider looks up this entry and creates a <code>BookingRepository</code> with the appropriate lifetime.</p>
+
+  <h3>Constructor Injection — step by step</h3>
+  <p>Constructor injection is the primary way services are delivered. You declare what you need as constructor parameters; the container reads those parameters via reflection and fulfils them automatically. You never call <code>new BookingRepository(...)</code> yourself.</p>
+
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/BookingRepository.cs</span></div>
+    <pre><span class="kw">public class</span> <span class="ty">BookingRepository</span> : <span class="ty">IBookingRepository</span>
+{
+    <span class="kw">private readonly</span> <span class="ty">BookingDbContext</span> _context;
+
+    <span class="cm">// The container sees this constructor via reflection.</span>
+    <span class="cm">// It knows it needs a BookingDbContext — so it resolves one first,</span>
+    <span class="cm">// then calls this constructor with the resolved instance.</span>
+    <span class="kw">public</span> <span class="ty">BookingRepository</span>(<span class="ty">BookingDbContext</span> context) => _context = context;
+}</pre>
+  </div>
+
+  <p>The container resolves the entire dependency tree recursively. When a request comes in for <code>IBookingRepository</code>, the chain looks like this:</p>
+
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>dependency resolution chain — what happens inside the container</span></div>
+    <pre><span class="cm">// HTTP request arrives at /payments/{bookingId}/confirm</span>
+<span class="cm">// Handler declares: (IBookingRepository repository) → container kicks in</span>
+
+<span class="cm">Step 1: "I need IBookingRepository"</span>
+        <span class="cm">→ Lookup: IBookingRepository maps to BookingRepository (Scoped)</span>
+        <span class="cm">→ Need to construct BookingRepository</span>
+
+<span class="cm">Step 2: "BookingRepository constructor needs BookingDbContext"</span>
+        <span class="cm">→ Lookup: BookingDbContext registered via AddDbContext() (Scoped)</span>
+        <span class="cm">→ Need to construct BookingDbContext</span>
+
+<span class="cm">Step 3: "BookingDbContext constructor needs DbContextOptions&lt;BookingDbContext&gt;"</span>
+        <span class="cm">→ Lookup: registered automatically by AddDbContext() (Singleton)</span>
+        <span class="cm">→ Options already exist — reuse</span>
+
+<span class="cm">Step 4: DbContextOptions resolved ✓</span>
+        <span class="cm">→ new BookingDbContext(options) created ✓</span>
+
+<span class="cm">Step 5: BookingDbContext resolved ✓</span>
+        <span class="cm">→ new BookingRepository(dbContext) created ✓</span>
+
+<span class="cm">Step 6: IBookingRepository resolved ✓</span>
+        <span class="cm">→ injected into handler as 'repository' parameter ✓</span></pre>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>You declare what you need — the container figures out how to build it</strong>
+      Your code never writes <code>new BookingRepository(new BookingDbContext(...))</code>. You declare <code>IBookingRepository repository</code> as a parameter and the container reconstructs the entire tree. If you add a new dependency to <code>BookingRepository</code>'s constructor, the container picks it up automatically — nothing else changes.
+    </div>
+  </div>
+
+  <h3>How the container resolves — the reflection mechanics</h3>
+  <p>The container is not magic — it uses C# <strong>reflection</strong> to inspect your types at runtime. Reflection is the ability of code to read its own type metadata: what constructors a class has, what parameters those constructors take, what type each parameter is. The container exploits this to wire up the dependency tree without you writing any glue code.</p>
+  <p>Here is a simplified version of what <code>GetRequiredService&lt;IBookingRepository&gt;()</code> actually does internally:</p>
+
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>pseudo-code — what the container does internally to resolve a type</span></div>
+    <pre><span class="kw">object</span> <span class="me">Resolve</span>(<span class="ty">Type</span> serviceType, <span class="ty">IServiceScope</span> scope)
+{
+    <span class="cm">// 1. Look up the ServiceDescriptor for the requested type.</span>
+    <span class="cm">//    This is a dictionary keyed by service type.</span>
+    <span class="ty">ServiceDescriptor</span> descriptor = _registrations[serviceType];
+    <span class="cm">//    e.g. { serviceType: IBookingRepository,</span>
+    <span class="cm">//           implType:    BookingRepository,</span>
+    <span class="cm">//           lifetime:    Scoped }</span>
+
+    <span class="cm">// 2. Check the lifetime cache — no need to construct twice.</span>
+    <span class="cm">//    Singleton: check _singletonCache (app-wide)</span>
+    <span class="cm">//    Scoped:    check scope._scopedCache (per-request)</span>
+    <span class="cm">//    Transient: skip cache — always construct a new instance</span>
+    <span class="kw">if</span> (descriptor.Lifetime == Scoped &amp;&amp; scope._cache.<span class="me">TryGetValue</span>(serviceType, <span class="kw">out var</span> cached))
+        <span class="kw">return</span> cached;  <span class="cm">// already built this request — reuse it</span>
+
+    <span class="cm">// 3. Find the implementation type's constructor via reflection.</span>
+    <span class="cm">//    GetConstructors() returns all public constructors.</span>
+    <span class="cm">//    The container picks the one with the most parameters it can satisfy.</span>
+    <span class="ty">ConstructorInfo</span> ctor = descriptor.ImplementationType
+        .<span class="me">GetConstructors</span>()                <span class="cm">// reflection: reads type metadata</span>
+        .<span class="me">OrderByDescending</span>(c => c.GetParameters().Length)
+        .<span class="me">First</span>();
+
+    <span class="cm">// 4. Resolve each constructor parameter recursively.</span>
+    <span class="cm">//    GetParameters() returns the parameter list — name, type, position.</span>
+    <span class="cm">//    For BookingRepository: one parameter of type BookingDbContext.</span>
+    <span class="ty">ParameterInfo</span>[] parameters = ctor.<span class="me">GetParameters</span>();
+    <span class="kw">object</span>[] args = parameters
+        .<span class="me">Select</span>(p => <span class="me">Resolve</span>(p.ParameterType, scope))  <span class="cm">// ← recursion</span>
+        .<span class="me">ToArray</span>();
+    <span class="cm">//    For BookingRepository this recurses into Resolve(BookingDbContext),</span>
+    <span class="cm">//    which recurses into Resolve(DbContextOptions&lt;BookingDbContext&gt;),</span>
+    <span class="cm">//    which is already cached as a Singleton — base case, recursion unwinds.</span>
+
+    <span class="cm">// 5. Construct the object — equivalent to calling new BookingRepository(dbContext).</span>
+    <span class="cm">//    Activator.CreateInstance invokes the constructor reflectively.</span>
+    <span class="cm">//    (Real containers compile this to a delegate at startup for performance.)</span>
+    <span class="kw">object</span> instance = <span class="ty">Activator</span>.<span class="me">CreateInstance</span>(descriptor.ImplementationType, args);
+
+    <span class="cm">// 6. Store in the appropriate lifetime cache, then return.</span>
+    <span class="kw">if</span> (descriptor.Lifetime != Transient)
+        scope._cache[serviceType] = instance;
+
+    <span class="kw">return</span> instance;
+}</pre>
+  </div>
+
+  <p>Three reflection APIs do all the heavy lifting:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Reflection API</th><th>What it reads</th><th>Used for</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>Type.GetConstructors()</code></td>
+          <td>All public constructors of a class</td>
+          <td>Finding which constructor to invoke</td>
+        </tr>
+        <tr>
+          <td><code>ConstructorInfo.GetParameters()</code></td>
+          <td>Each parameter's name and <code>Type</code></td>
+          <td>Knowing what types to resolve recursively</td>
+        </tr>
+        <tr>
+          <td><code>Activator.CreateInstance(type, args[])</code></td>
+          <td>—</td>
+          <td>Calling the constructor to create the instance</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Real containers compile away the reflection overhead</strong>
+      Reflection is slow when called millions of times. ASP.NET Core's built-in container and third-party containers like Autofac use <code>Expression.Lambda</code> to compile each constructor call into a typed delegate (<code>Func&lt;IServiceProvider, object&gt;</code>) the first time a type is resolved. Subsequent resolutions call the compiled delegate directly — no reflection overhead. The first request pays the compilation cost; every request after that is near-native speed.
+    </div>
+  </div>
+
+  <h3>Registration — three lifetimes</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Lifetime</th><th>Instance created</th><th>Disposed</th><th>Example in this project</th></tr></thead>
+      <tbody>
+        <tr><td><code>Singleton</code></td><td>Once — first time it's requested</td><td>When the application shuts down</td><td><code>IConnectionMultiplexer</code> (Redis — one connection pool for the whole app)</td></tr>
+        <tr><td><code>Scoped</code></td><td>Once per scope — one per HTTP request</td><td>End of the request</td><td><code>IBookingRepository</code>, <code>BookingDbContext</code> (fresh DB connection per request)</td></tr>
+        <tr><td><code>Transient</code></td><td>Every time it's requested — always new</td><td>End of the scope it was used in</td><td>Lightweight stateless helpers</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/InfrastructureExtensions.cs</span></div>
+    <pre><span class="kw">public static</span> <span class="ty">IServiceCollection</span> <span class="me">AddBookingInfrastructure</span>(
+    <span class="kw">this</span> <span class="ty">IServiceCollection</span> services, <span class="ty">string</span> connectionString)
+{
+    <span class="cm">// AddDbContext registers BookingDbContext as Scoped by default.</span>
+    <span class="cm">// It also registers DbContextOptions&lt;BookingDbContext&gt; as Singleton.</span>
+    services.<span class="me">AddDbContext</span>&lt;<span class="ty">BookingDbContext</span>&gt;(opts => opts.<span class="me">UseSqlServer</span>(connectionString));
+
+    <span class="cm">// TService = IBookingRepository  → what callers declare in constructors/parameters</span>
+    <span class="cm">// TImplementation = BookingRepository → what the container actually instantiates</span>
+    services.<span class="me">AddScoped</span>&lt;<span class="ty">IBookingRepository</span>, <span class="ty">BookingRepository</span>&gt;();
+
+    <span class="kw">return</span> services;  <span class="cm">// return 'this' enables method chaining</span>
+}</pre>
+  </div>
+
+  <h3>Minimal API — parameter injection</h3>
+  <p>In minimal APIs, endpoint handler parameters are resolved from the container automatically. The framework distinguishes route parameters (primitive types matching route tokens) from services (registered interfaces/classes).</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre>app.<span class="me">MapPost</span>(<span class="st">"/book/{eventId}/{seatId}"</span>, <span class="kw">async</span> (
+    <span class="ty">string</span> eventId,                <span class="cm">// ← from route template {eventId}</span>
+    <span class="ty">string</span> seatId,                 <span class="cm">// ← from route template {seatId}</span>
+    <span class="ty">IConnectionMultiplexer</span> redis,  <span class="cm">// ← resolved from DI (Singleton)</span>
+    <span class="ty">IBookingRepository</span> repository, <span class="cm">// ← resolved from DI (Scoped — new per request)</span>
+    <span class="ty">ILogger</span>&lt;<span class="ty">Program</span>&gt; logger) =>    <span class="cm">// ← resolved from DI (built-in logging)</span>
+{
+    <span class="cm">// repository here is a BookingRepository wrapping a BookingDbContext</span>
+    <span class="cm">// — the container built the whole chain before this lambda ran</span>
+});</pre>
+  </div>
+
+  <h3>IServiceProvider — direct resolution (GetRequiredService)</h3>
+  <p>Sometimes you need to resolve a service manually rather than via constructor injection. <code>GetRequiredService&lt;T&gt;()</code> throws if the service is not registered. <code>GetService&lt;T&gt;()</code> returns null instead.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="ty">IServiceProvider</span> provider = ...; <span class="cm">// obtained from scope or app</span>
+
+<span class="cm">// Throws InvalidOperationException if IBookingRepository not registered</span>
+<span class="kw">var</span> repository = provider.<span class="me">GetRequiredService</span>&lt;<span class="ty">IBookingRepository</span>&gt;();
+
+<span class="cm">// Returns null if not registered — use when optional</span>
+<span class="kw">var</span> optional = provider.<span class="me">GetService</span>&lt;<span class="ty">ISomeOptionalService</span>&gt;();
+
+<span class="cm">// Resolve all registered implementations of an interface</span>
+<span class="kw">var</span> all = provider.<span class="me">GetServices</span>&lt;<span class="ty">IValidator</span>&gt;(); <span class="cm">// returns IEnumerable&lt;IValidator&gt;</span></pre>
+  </div>
+
+  <h3>Captive dependency — Singleton holding a Scoped service</h3>
+  <p>A Singleton lives for the entire application lifetime. If it holds a reference to a Scoped service, that service never gets disposed — it's "captured" in the Singleton forever. ASP.NET Core detects this at startup and throws.</p>
+
+  <div class="compare">
+    <div class="compare-col before">
+      <h4>Broken — captive dependency</h4>
+      <div class="code-block">
+        <pre><span class="cm">// Workers are Singleton.</span>
+<span class="cm">// IBookingRepository is Scoped.</span>
+<span class="cm">// This throws at startup:</span>
+<span class="kw">public</span> <span class="ty">BookingExpiryWorker</span>(
+    <span class="ty">IBookingRepository</span> repository) <span class="cm">// ❌</span>
+{
+    _repository = repository;
+    <span class="cm">// Scoped service captured in Singleton</span>
+    <span class="cm">// Same DbContext reused forever</span>
+    <span class="cm">// Memory leak + stale data</span>
+}</pre>
+      </div>
+    </div>
+    <div class="compare-col after">
+      <h4>Correct — scope per cycle</h4>
+      <div class="code-block">
+        <pre><span class="cm">// Inject IServiceScopeFactory (Singleton-safe).</span>
+<span class="cm">// Create a fresh scope per worker cycle.</span>
+<span class="kw">public</span> <span class="ty">BookingExpiryWorker</span>(
+    <span class="ty">IServiceScopeFactory</span> scopeFactory) <span class="cm">// ✅</span>
+{
+    _scopeFactory = scopeFactory;
+}
+
+<span class="cm">// In ExecuteAsync:</span>
+<span class="kw">using var</span> scope = _scopeFactory.<span class="me">CreateScope</span>();
+<span class="kw">var</span> repo = scope.ServiceProvider
+    .<span class="me">GetRequiredService</span>&lt;<span class="ty">IBookingRepository</span>&gt;();
+<span class="cm">// New DbContext per cycle. Disposed with the scope.</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Rule: never inject a shorter-lived service into a longer-lived one</strong>
+      Singleton can only hold Singletons. Scoped can hold Scoped or Singleton. Transient can hold anything. Violating this is a captive dependency — the shorter-lived service gets pinned to the longer-lived container and is never properly disposed.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 11b. TOP-LEVEL STATEMENTS & PROGRAM.CS          -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="toplevel">
+  <div class="section-label">Section 11b</div>
+  <h2>Top-Level Statements &amp; Program.cs</h2>
+  <p class="section-intro">C# 9 introduced top-level statements — a way to write the program entry point without explicitly declaring a <code>Main</code> method or wrapping everything in a class. ASP.NET Core minimal APIs are built on this.</p>
+
+  <h3>What top-level statements actually are</h3>
+  <p>The compiler generates the boilerplate for you. Behind the scenes, everything in Program.cs becomes the body of a <code>Main</code> method inside a compiler-generated class called <code>&lt;Program&gt;</code>.</p>
+
+  <div class="compare">
+    <div class="compare-col before">
+      <h4>Old — explicit Main</h4>
+      <div class="code-block">
+        <pre><span class="kw">public class</span> <span class="ty">Program</span>
+{
+    <span class="kw">public static void</span> <span class="me">Main</span>(<span class="ty">string</span>[] args)
+    {
+        <span class="kw">var</span> builder =
+            <span class="ty">WebApplication</span>.<span class="me">CreateBuilder</span>(args);
+
+        builder.Services.<span class="me">AddBookingInfrastructure</span>(...);
+
+        <span class="kw">var</span> app = builder.<span class="me">Build</span>();
+        app.<span class="me">MapPost</span>(<span class="st">"/book"</span>, ...);
+        app.<span class="me">Run</span>();
+    }
+}</pre>
+      </div>
+    </div>
+    <div class="compare-col after">
+      <h4>New — top-level statements (C# 9+)</h4>
+      <div class="code-block">
+        <pre><span class="cm">// No class, no Main, no namespace.</span>
+<span class="cm">// The compiler generates all of that.</span>
+<span class="kw">var</span> builder = <span class="ty">WebApplication</span>.<span class="me">CreateBuilder</span>(args);
+
+builder.Services.<span class="me">AddBookingInfrastructure</span>(...);
+
+<span class="kw">var</span> app = builder.<span class="me">Build</span>();
+app.<span class="me">MapPost</span>(<span class="st">"/book"</span>, ...);
+app.<span class="me">Run</span>();</pre>
+      </div>
+    </div>
+  </div>
+
+  <h3>The global namespace</h3>
+  <p>Top-level statement code lives in the <strong>global (root) namespace</strong> — there is no enclosing <code>namespace</code> declaration. This has one important consequence: types defined in named namespaces within the same project are not automatically in scope. You still need <code>using</code> directives to reference them by short name.</p>
+
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre><span class="cm">// Program.cs is in the global namespace (no namespace declaration).</span>
+<span class="cm">// Workers declare: namespace Booking.API;</span>
+<span class="cm">// Even though they're in the same project, they're in a different namespace.</span>
+<span class="cm">// Without this using, OutboxRelayWorker and BookingExpiryWorker cannot be found.</span>
+<span class="kw">using</span> Booking.API;           <span class="cm">// OutboxRelayWorker, BookingExpiryWorker</span>
+<span class="kw">using</span> Booking.Domain;        <span class="cm">// IBookingRepository</span>
+<span class="kw">using</span> Booking.Infrastructure; <span class="cm">// AddBookingInfrastructure()</span>
+
+<span class="cm">// Top-level code starts here — no wrapping needed</span>
+<span class="kw">var</span> builder = <span class="ty">WebApplication</span>.<span class="me">CreateBuilder</span>(args);</pre>
+  </div>
+
+  <h3>Constraints of top-level statements</h3>
+  <ul>
+    <li><strong>Only one file per project</strong> may contain top-level statements. The compiler generates one <code>Main</code> entry point — two files with top-level statements would create two <code>Main</code> methods.</li>
+    <li><strong>Cannot be inside a namespace.</strong> File-scoped namespaces (<code>namespace Foo;</code>) and top-level statements cannot coexist in the same file.</li>
+    <li><strong>Local types are allowed.</strong> You can declare classes, records, and interfaces at the bottom of Program.cs — they'll be part of the global namespace.</li>
+  </ul>
+
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs — local type declared at the bottom</span></div>
+    <pre><span class="cm">// ... all the app.MapPost / app.Run code above ...</span>
+
+app.<span class="me">Run</span>();
+
+<span class="cm">// Types declared after app.Run() are still valid — they're in the global namespace.</span>
+<span class="cm">// BookingEvent record is declared here because it's small and only used in this project.</span>
+<span class="kw">record</span> <span class="ty">BookingEvent</span>(<span class="ty">string</span> EventId, <span class="ty">string</span> SeatId, <span class="ty">string</span> UserId);</pre>
+  </div>
+
+  <h3>WebApplication builder — the startup pipeline</h3>
+  <p>Program.cs follows a strict three-phase structure: configure services → build → configure middleware/endpoints → run.</p>
+
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs — annotated structure</span></div>
+    <pre><span class="cm">// ── 1. CREATE BUILDER ─────────────────────────────────────────────</span>
+<span class="cm">// Sets up configuration (appsettings.json, env vars), logging, hosting.</span>
+<span class="kw">var</span> builder = <span class="ty">WebApplication</span>.<span class="me">CreateBuilder</span>(args);
+
+<span class="cm">// ── 2. REGISTER SERVICES (IServiceCollection) ─────────────────────</span>
+<span class="cm">// builder.Services is the IServiceCollection.</span>
+<span class="cm">// Anything registered here is available for injection at runtime.</span>
+builder.Services.<span class="me">AddSingleton</span>&lt;<span class="ty">IConnectionMultiplexer</span>&gt;(redis);
+builder.Services.<span class="me">AddBookingInfrastructure</span>(connectionString);
+builder.Services.<span class="me">AddHostedService</span>&lt;<span class="ty">BookingExpiryWorker</span>&gt;();
+
+<span class="cm">// ── 3. BUILD (IServiceCollection → IServiceProvider) ──────────────</span>
+<span class="cm">// Freezes registrations. Creates the IServiceProvider.</span>
+<span class="cm">// No new services can be registered after this line.</span>
+<span class="kw">var</span> app = builder.<span class="me">Build</span>();
+
+<span class="cm">// ── 4. REGISTER MIDDLEWARE & ENDPOINTS ────────────────────────────</span>
+<span class="cm">// app.Use... adds middleware to the request pipeline.</span>
+<span class="cm">// app.MapPost... registers route handlers.</span>
+app.<span class="me">MapPost</span>(<span class="st">"/book/{eventId}/{seatId}"</span>, <span class="kw">async</span> (<span class="ty">IBookingRepository</span> repository, ...) => { ... });
+app.<span class="me">MapPost</span>(<span class="st">"/payments/{bookingId}/confirm"</span>, <span class="kw">async</span> (<span class="ty">IBookingRepository</span> repository, ...) => { ... });
+
+<span class="cm">// ── 5. RUN ────────────────────────────────────────────────────────</span>
+<span class="cm">// Starts the HTTP server. Blocks until the app shuts down.</span>
+app.<span class="me">Run</span>();</pre>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>args is the command-line arguments array</strong>
+      <code>WebApplication.CreateBuilder(args)</code> receives the same <code>string[] args</code> that would have been the <code>Main</code> parameter. The compiler passes the generated <code>Main</code>'s args through automatically. This is how you can override configuration from the command line (<code>dotnet run --urls http://localhost:5001</code>).
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 12. PATTERN MATCHING                            -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="patterns">
+  <div class="section-label">Section 12</div>
+  <h2>Pattern Matching</h2>
+  <p class="section-intro">Pattern matching lets you inspect the shape or value of an expression and branch accordingly. Cleaner than a chain of <code>if (x is SomeType)</code> checks.</p>
+
+  <h3>is null / is not null</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre><span class="kw">var</span> booking = <span class="kw">await</span> repository.<span class="me">GetByIdAsync</span>(bookingId);
+<span class="kw">if</span> (booking <span class="kw">is null</span>)
+    <span class="kw">return</span> <span class="ty">Results</span>.<span class="me">NotFound</span>(<span class="kw">new</span> { message = <span class="st">"Booking not found."</span> });</pre>
+  </div>
+
+  <h3>Switch expression (C# 8+)</h3>
+  <p>Returns a value based on matching. Exhaustiveness is checked — the compiler warns if a case is unhandled.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="kw">string</span> label = booking.Status <span class="kw">switch</span>
+{
+    <span class="st">"Pending"</span>   => <span class="st">"Awaiting payment"</span>,
+    <span class="st">"Confirmed"</span> => <span class="st">"Payment received"</span>,
+    <span class="st">"Expired"</span>   => <span class="st">"Booking lapsed"</span>,
+    _           => <span class="st">"Unknown"</span>           <span class="cm">// discard pattern — catch-all</span>
+};</pre>
+  </div>
+
+  <h3>Type patterns</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="kw">if</span> (ex <span class="kw">is</span> <span class="ty">InvalidOperationException</span> ioe)
+{
+    <span class="cm">// ioe is now typed as InvalidOperationException</span>
+    logger.<span class="me">LogWarning</span>(ioe.Message);
+}</pre>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 13. BACKGROUNDSERVICE                          -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="hosted">
+  <div class="section-label">Section 13</div>
+  <h2>BackgroundService &amp; Hosted Services</h2>
+  <p class="section-intro">A <code>BackgroundService</code> runs alongside the web server — it starts when the app starts and is cancelled when it shuts down. Used for polling, cleanup sweeps, and outbox relays.</p>
+
+  <h3>Structure</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/BookingExpiryWorker.cs</span></div>
+    <pre><span class="cm">// Inherit BackgroundService — implement one method</span>
+<span class="kw">public class</span> <span class="ty">BookingExpiryWorker</span> : <span class="ty">BackgroundService</span>
+{
+    <span class="cm">// Called once by the host. Loop yourself — host doesn't restart it.</span>
+    <span class="kw">protected override async</span> <span class="ty">Task</span> <span class="me">ExecuteAsync</span>(<span class="ty">CancellationToken</span> stoppingToken)
+    {
+        <span class="kw">while</span> (!stoppingToken.IsCancellationRequested)
+        {
+            <span class="kw">try</span>
+            {
+                <span class="cm">// ... work ...</span>
+            }
+            <span class="kw">catch</span> (<span class="ty">Exception</span> ex)
+            {
+                <span class="cm">// catch here — unhandled exception kills the worker permanently</span>
+                _logger.<span class="me">LogError</span>(ex, <span class="st">"Sweep failed, will retry"</span>);
+            }
+            <span class="kw">await</span> <span class="ty">Task</span>.<span class="me">Delay</span>(<span class="ty">TimeSpan</span>.<span class="me">FromSeconds</span>(<span class="nu">30</span>), stoppingToken);
+        }
+    }
+}</pre>
+  </div>
+
+  <h3>Registration</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre><span class="cm">// Registered as a hosted service — host starts it automatically</span>
+builder.Services.<span class="me">AddHostedService</span>&lt;<span class="ty">OutboxRelayWorker</span>&gt;();
+builder.Services.<span class="me">AddHostedService</span>&lt;<span class="ty">BookingExpiryWorker</span>&gt;();</pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Workers are registered as Singleton</strong>
+      <code>AddHostedService&lt;T&gt;</code> registers <code>T</code> as a Singleton. You cannot inject Scoped services (DbContext, repositories) directly into the constructor — use <code>IServiceScopeFactory</code> and create a scope per cycle instead.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- 14. MISCELLANEOUS                               -->
+<!-- ══════════════════════════════════════════════ -->
+<section class="section" id="misc">
+  <div class="section-label">Section 14</div>
+  <h2>Miscellaneous — var, string interpolation, using declarations</h2>
+
+  <h3>var — type inference</h3>
+  <p>The compiler infers the type from the right side. The type is still static — it's just written once.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="kw">var</span> booking = <span class="kw">await</span> repository.<span class="me">GetByIdAsync</span>(id);
+<span class="cm">// compiler infers: Booking? booking</span>
+
+<span class="kw">var</span> expired = <span class="kw">await</span> repository.<span class="me">GetPendingBookingsOlderThan</span>(cutoff);
+<span class="cm">// compiler infers: List&lt;Booking&gt; expired</span></pre>
+  </div>
+
+  <h3>String interpolation ($"...")</h3>
+  <p>Embed expressions directly in a string literal. Evaluated at runtime.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/Program.cs</span></div>
+    <pre><span class="kw">var</span> lockKey  = $<span class="st">"seat:lock:{eventId}:{seatId}"</span>;
+<span class="kw">var</span> seatsKey = $<span class="st">"event:{eventId}:seats"</span>;
+
+<span class="cm">// With formatting</span>
+$<span class="st">"Price: {price:C2}"</span>   <span class="cm">// currency, 2 decimal places</span>
+$<span class="st">"Date: {date:yyyy-MM-dd}"</span></pre>
+  </div>
+
+  <h3>using declarations (C# 8+)</h3>
+  <p><code>using var x = ...</code> disposes <code>x</code> at the end of the enclosing scope (closing brace). Cleaner than the old <code>using (var x = ...) { }</code> block.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/OutboxRelayWorker.cs</span></div>
+    <pre><span class="cm">// Old style — requires extra braces and indentation</span>
+<span class="kw">using</span> (<span class="kw">var</span> scope = _scopeFactory.<span class="me">CreateScope</span>()) { ... }
+
+<span class="cm">// New style — disposed when the enclosing block ends</span>
+<span class="kw">using var</span> scope      = _scopeFactory.<span class="me">CreateScope</span>();
+<span class="kw">using var</span> connection = <span class="kw">await</span> factory.<span class="me">CreateConnectionAsync</span>(stoppingToken);
+<span class="kw">using var</span> channel    = <span class="kw">await</span> connection.<span class="me">CreateChannelAsync</span>();
+<span class="cm">// all three disposed in reverse order at end of try block</span></pre>
+  </div>
+
+  <h3>Guid and DateTime</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Domain/Booking.cs</span></div>
+    <pre><span class="ty">Guid</span> Id = <span class="ty">Guid</span>.<span class="me">NewGuid</span>();   <span class="cm">// generates a new random UUID: "3f2504e0-4f89-..."</span>
+
+<span class="ty">DateTime</span> CreatedAt = <span class="ty">DateTime</span>.UtcNow;
+<span class="cm">// Always use UtcNow in server code — no timezone ambiguity</span>
+
+<span class="ty">TimeSpan</span> HoldWindow = <span class="ty">TimeSpan</span>.<span class="me">FromMinutes</span>(<span class="nu">5</span>);
+<span class="ty">DateTime</span> cutoff     = <span class="ty">DateTime</span>.UtcNow - HoldWindow;
+<span class="cm">// DateTime arithmetic: subtract a TimeSpan to get an earlier DateTime</span></pre>
+  </div>
+
+  <h3>readonly fields</h3>
+  <p><code>readonly</code> on a field means it can only be assigned in the constructor or at declaration. Combined with <code>private</code>, it prevents both external and internal reassignment after construction.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/BookingExpiryWorker.cs</span></div>
+    <pre><span class="kw">private readonly</span> <span class="ty">IServiceScopeFactory</span> _scopeFactory;
+<span class="kw">private readonly</span> <span class="ty">IConnectionMultiplexer</span> _redis;
+<span class="kw">private readonly</span> <span class="ty">ILogger</span>&lt;<span class="ty">BookingExpiryWorker</span>&gt; _logger;
+
+<span class="cm">// Set once in constructor — cannot be reassigned anywhere in the class</span>
+<span class="kw">public</span> <span class="ty">BookingExpiryWorker</span>(<span class="ty">IServiceScopeFactory</span> scopeFactory, ...)
+{
+    _scopeFactory = scopeFactory;  <span class="cm">// only valid assignment</span>
+}</pre>
+  </div>
+
+  <h3>static readonly — class-level constants</h3>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.API/BookingExpiryWorker.cs</span></div>
+    <pre><span class="cm">// One instance shared by all instances of the class</span>
+<span class="kw">private static readonly</span> <span class="ty">TimeSpan</span> HoldWindow = <span class="ty">TimeSpan</span>.<span class="me">FromMinutes</span>(<span class="nu">5</span>);
+<span class="cm">// static: belongs to the class, not an instance</span>
+<span class="cm">// readonly: set once at declaration, never changed</span></pre>
+  </div>
+</section>
+
+<footer class="footer">
+  <span>C# Language Reference — Ticketing System Study Sessions</span>
+  <span>Updated July 2026 · .NET 10 · C# 13</span>
+</footer>
+
+</div><!-- /page -->
+
+</body>
+</html>

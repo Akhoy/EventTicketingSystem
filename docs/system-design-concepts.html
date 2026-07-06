@@ -94,6 +94,9 @@
     <li><a href="#consistency">Consistency Models</a></li>
     <li><a href="#redis">Redis Atomicity &amp; Distributed Counter</a></li>
     <li><a href="#ddd">Domain-Driven Design (DDD)</a></li>
+    <li><a href="#clean-arch">Clean Architecture</a></li>
+    <li><a href="#repository">Repository Pattern</a></li>
+    <li><a href="#uow">Unit of Work — and the Nick Chapsas Debate</a></li>
   </ol>
 </div>
 
@@ -388,14 +391,14 @@ booking.Status = null;          // crashes later</code></pre>
     }
 }</code></pre>
 
-<p><code>private set</code> means nothing outside the class can assign to Status. <code>Confirm()</code> is the only door in. The compiler enforces this — trying to do <code>booking.Status = "Confirmed"</code> directly is a compile error.</p>
+<p><code>private set</code> means nothing outside the class can assign to Status. <code>Confirm()</code> is the only door in. The compiler enforces this — trying to do <code>booking.Status = "Confirmed"</code> directly is a compile error on every single build. A code review is a human reading code — a human can miss a line. The compiler cannot. You physically cannot ship the mistake.</p>
 
 <h3>The Four Core Concepts</h3>
 
 <div class="concept-card">
   <h4>Aggregate Root</h4>
-  <p>An object that controls its own state. Only entry point for changes. Your <code>Booking</code> class is one.</p>
-  <p><strong>Plain English:</strong> Object protects itself. You call a method. The method checks rules. Only then does state change.</p>
+  <p>An object that controls its own state. The <strong>only entry point</strong> for changes — no side door. Your <code>Booking</code> class is one.</p>
+  <p><strong>Plain English:</strong> You can't reach <code>SeatId</code> or <code>Status</code> and change them directly — you have to go through a method on <code>Booking</code>. Because all changes go through the same door, all the rules stay intact. There's no way around them.</p>
 </div>
 
 <div class="concept-card">
@@ -456,31 +459,447 @@ var booking = Booking.Create("evt-coldplay", "A1", "user-123");
 <ul>
   <li><strong>It has a name</strong> — <code>Booking.Create()</code> communicates intent. <code>new Booking()</code> does not.</li>
   <li><strong>Forces valid state</strong> — the only door in. All validation happens here.</li>
-  <li><strong>Private constructor</strong> — prevents bypassing Create() via <code>new Booking()</code>. EF Core can still call it via reflection (it bypasses access rules).</li>
+  <li><strong>Private constructor</strong> — prevents bypassing Create() via <code>new Booking()</code>. EF Core can still call it via reflection — reflection bypasses access modifiers entirely (<code>private</code>, <code>protected</code>, it doesn't matter). EF Core is the framework, not application code, so it's allowed to do things your own code can't.</li>
 </ul>
 
-<h3>Why Confirm() is Idempotent but Expire() Silently Returns</h3>
+<h3>Why Confirm() is Idempotent but Expire() Never Throws</h3>
+<p>The question isn't about the method — it's about <strong>who's calling and what stale state means for that caller</strong>.</p>
 <table>
-  <thead><tr><th>Method</th><th>Caller</th><th>Behaviour if already done</th><th>Why</th></tr></thead>
+  <thead><tr><th>Method</th><th>Caller</th><th>Behaviour on stale state</th><th>Reason</th></tr></thead>
   <tbody>
     <tr>
       <td><code>Confirm()</code></td>
-      <td>HTTP endpoint — user just paid</td>
-      <td>Silent return if already Confirmed. Throws if Expired.</td>
-      <td>Idempotent for double-clicks. Expired = genuine problem, caller must know.</td>
+      <td>Payment webhook</td>
+      <td>Idempotent (silent) if already Confirmed. Throws if Expired.</td>
+      <td>
+        Webhook may fire more than once — silent return on a duplicate call is the right idempotent behaviour.<br/><br/>
+        But if payment arrives for an <em>Expired</em> booking, something genuinely went wrong — a user paid for a seat they no longer hold. That needs to surface as an error, not be silently swallowed.
+      </td>
     </tr>
     <tr>
       <td><code>Expire()</code></td>
-      <td>Background worker sweeping many bookings</td>
-      <td>Silent return always</td>
-      <td>Worker must not crash on stale rows. Already expired = job done.</td>
+      <td>Background sweep worker — runs every 30s across thousands of rows</td>
+      <td>Silent return always — never throws</td>
+      <td>
+        If the worker hits a row that's already Expired or Confirmed, that just means the previous sweep already handled it. Throwing would crash the worker over nothing.
+      </td>
     </tr>
   </tbody>
 </table>
+<p><strong>Same situation (stale state), different caller, different right answer.</strong></p>
 
 <div class="interview">
   <strong>Interview answer — "Walk me through your Booking class":</strong>
   "Booking is an aggregate root. All properties have private setters — nothing outside the class can change state directly. Business rules live on the object through methods: Confirm() enforces that only a Pending booking can be confirmed and is idempotent so calling it twice is safe — important for payment webhooks that may fire more than once. Expire() is a silent no-op if already expired — the background worker processes many bookings and should never crash on a stale row. If any developer tries to set Status directly, it's a compile error. The rules are enforced by the compiler, not by convention or code review."
+</div>
+
+<!-- ══════════════════════════════ 8. CLEAN ARCHITECTURE ══════════════════════════════ -->
+<h2 id="clean-arch">8. Clean Architecture</h2>
+
+<p>Clean Architecture is a way of structuring a codebase so that <strong>business rules never depend on infrastructure</strong>. The core rule: inner layers know nothing about outer layers. Dependencies only point inward.</p>
+
+<h3>The Problem It Solves</h3>
+<p>Before the split, everything lived in one project: <code>Booking.cs</code>, <code>BookingDbContext</code>, Program.cs endpoints, and workers all in <code>Booking.API</code>. The problems:</p>
+<ul>
+  <li>Business logic and EF Core calls were in the same files — changing the database means touching the same file as your business rules</li>
+  <li>Workers referenced <code>BookingDbContext</code> directly — persistence and domain logic were tangled</li>
+  <li>No seam to test business rules without a real database</li>
+</ul>
+
+<h3>The Three-Layer Split</h3>
+
+<pre><code>┌──────────────────────────────────────────────────────┐
+│                    Booking.API                       │
+│   HTTP endpoints · workers · DI wiring (Program.cs)  │
+│   References: Domain + Infrastructure                │
+├──────────────────────────────────────────────────────┤
+│               Booking.Infrastructure                 │
+│   BookingDbContext · BookingRepository · Migrations  │
+│   References: Domain only                            │
+├──────────────────────────────────────────────────────┤
+│                  Booking.Domain                      │
+│     Booking aggregate root · IBookingRepository      │
+│     Zero NuGet dependencies                          │
+└──────────────────────────────────────────────────────┘
+
+Dependency direction:
+  API  ──▶  Infrastructure  ──▶  Domain
+  API  ──▶  Domain
+
+Domain knows nothing. Infrastructure knows Domain. API knows both.</code></pre>
+
+<h3>What Moved Where</h3>
+<table>
+  <thead><tr><th>File</th><th>Before</th><th>After</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><code>Booking.cs</code></td><td>Booking.API</td><td>Booking.Domain</td><td>Pure business logic. No infrastructure knowledge.</td></tr>
+    <tr><td><code>IBookingRepository.cs</code></td><td>Did not exist</td><td>Booking.Domain</td><td>Domain defines what it needs, not how it's stored.</td></tr>
+    <tr><td><code>BookingDbContext.cs</code></td><td>Booking.API</td><td>Booking.Infrastructure</td><td>EF Core is an infrastructure detail.</td></tr>
+    <tr><td><code>BookingRepository.cs</code></td><td>Did not exist</td><td>Booking.Infrastructure</td><td>EF Core implementation of the domain's interface.</td></tr>
+    <tr><td><code>Migrations/</code></td><td>Booking.API</td><td>Booking.Infrastructure</td><td>Migrations belong with their DbContext.</td></tr>
+  </tbody>
+</table>
+
+<div class="why">
+  <strong>Why does IBookingRepository live in Domain, not Infrastructure?</strong>
+  The domain defines <em>what it needs</em> — a way to save and retrieve bookings. It doesn't define <em>how</em>. The interface is the contract. If it lived in Infrastructure, Domain would have to reference Infrastructure to use it — that reverses the dependency direction. The rule is: Infrastructure depends on Domain, never the reverse.
+</div>
+
+<h3>IServiceCollection vs IServiceProvider</h3>
+<table>
+  <thead><tr><th></th><th>IServiceCollection</th><th>IServiceProvider</th></tr></thead>
+  <tbody>
+    <tr><td><strong>What it is</strong></td><td>The registry — list of what can be resolved</td><td>The resolver — hands you an instance at runtime</td></tr>
+    <tr><td><strong>When used</strong></td><td>Startup, via <code>builder.Services.AddX()</code></td><td>Runtime: constructor injection, or <code>scope.ServiceProvider.GetRequiredService&lt;T&gt;()</code></td></tr>
+    <tr><td><strong>In this project</strong></td><td><code>builder.Services.AddBookingInfrastructure(...)</code> registers both DbContext and IBookingRepository</td><td>Workers manually resolve <code>IBookingRepository</code> from a new scope each cycle</td></tr>
+  </tbody>
+</table>
+
+<h3>AddBookingInfrastructure — Extension Method</h3>
+<pre><code>// Booking.Infrastructure/InfrastructureExtensions.cs
+public static IServiceCollection AddBookingInfrastructure(
+    this IServiceCollection services, string connectionString)
+{
+    services.AddDbContext&lt;BookingDbContext&gt;(options =>
+        options.UseSqlServer(connectionString));
+    services.AddScoped&lt;IBookingRepository, BookingRepository&gt;();
+    return services;
+}
+
+// Program.cs — one line, no EF Core knowledge here
+builder.Services.AddBookingInfrastructure(
+    builder.Configuration.GetConnectionString("SqlServer")!);</code></pre>
+<p>Program.cs has zero knowledge of <code>BookingDbContext</code>, <code>UseSqlServer</code>, or <code>BookingRepository</code>. All infrastructure wiring is encapsulated in one method in the Infrastructure project. Switching to Postgres means changing <code>UseSqlServer</code> to <code>UseNpgsql</code> in one file — nothing in Program.cs or Domain changes.</p>
+
+<div class="warn">
+  <strong>Workers are Singleton — they cannot inject Scoped services directly.</strong>
+  <code>IBookingRepository</code> and <code>BookingDbContext</code> are Scoped (one instance per request). A Singleton lives forever — holding a Scoped service inside it means that service is never disposed, leaking DB connections. ASP.NET Core throws a captive dependency exception at startup if you try. Solution: inject <code>IServiceScopeFactory</code> (which is Singleton-safe), then create a new scope at the start of each worker cycle. The scope — and the DbContext inside it — is disposed at the end of the <code>using</code> block.
+  <pre><code>// Workers do this each cycle:
+using var scope = _scopeFactory.CreateScope();
+var repository = scope.ServiceProvider.GetRequiredService&lt;IBookingRepository&gt;();
+// scope.Dispose() at end of using block → DbContext is cleaned up</code></pre>
+</div>
+
+<div class="interview">
+  <strong>Interview answer — "Why Clean Architecture?":</strong>
+  "I split Booking.API into three projects: Domain, Infrastructure, and API. Domain has zero NuGet dependencies — pure C# with the Booking aggregate and the IBookingRepository interface. Infrastructure implements that interface using EF Core. API wires everything together with one call to AddBookingInfrastructure(). The dependency direction is always inward: API depends on Infrastructure and Domain, Infrastructure depends on Domain, Domain depends on nothing. If we swap SQL Server for Postgres, nothing in Domain or the HTTP handlers changes — only one method in Infrastructure."
+</div>
+
+<!-- ══════════════════════════════ 9. REPOSITORY PATTERN ══════════════════════════════ -->
+<h2 id="repository">9. Repository Pattern</h2>
+
+<h3>Why it's called a repository</h3>
+<p>A repository in the physical world is a place you go to fetch and store things — a library, a warehouse, a filing cabinet. You don't care how things are organised inside. You say "give me the booking with ID 123" and it comes back. You say "store this booking" and it disappears inside. What happens in there is not your problem.</p>
+<p>That's exactly what <code>IBookingRepository</code> does. The endpoint says "give me a booking" — it doesn't know or care whether that came from SQL Server, MongoDB, an in-memory list, or a text file. The repository hides all of that.</p>
+
+<pre><code>// The endpoint thinks it's talking to "a place that holds bookings"
+var booking = await repository.GetByIdAsync(id);
+
+// It has no idea this is running underneath:
+return await _context.Bookings.FindAsync(id);  // SQL Server, EF Core, connection pools — all hidden</code></pre>
+
+<p>The interface is described as <strong>collection-like</strong> because calling <code>repository.AddAsync(booking)</code> feels like adding to a list — <code>myList.Add(booking)</code>. The caller thinks in terms of "a collection of bookings", not "a database table with rows and SQL". The repository creates that illusion: a simple get/add/remove surface, regardless of what's actually inside.</p>
+<p>Crucially, the repository holds <strong>domain objects</strong> — not raw database rows, not DTOs. What comes back from <code>GetByIdAsync()</code> is a <code>Booking</code> domain object, not a plain bag of column values. The distinction matters because a raw row from a <code>DataReader</code> is just data: <code>Id</code>, <code>Status</code>, <code>CreatedAt</code> as primitive values with no behaviour attached. A domain object carries both state and rules. But to be precise — <code>Confirm()</code> and <code>Expire()</code> are not part of the repository. The repository's job is storage, retrieval, and search. You fetch the object from the repository, then call domain behaviour on it, then hand it back to the repository to persist. Three separate steps.</p>
+<pre><code>var booking = await repository.GetByIdAsync(id);  // 1. repository retrieves
+booking.Confirm();                                 // 2. domain behaviour — nothing to do with repository
+await repository.SaveAsync();                      // 3. repository persists the change</code></pre>
+<p>Martin Fowler named and defined the pattern in 2002: <em>"a mechanism for encapsulating storage, retrieval, and search behaviour, which emulates a collection of objects."</em> Every developer since has used the same word for the same idea — so when you see <code>IBookingRepository</code> you immediately know what it is without reading the code. The name is convention. The actual value is the interface that lets everything else pretend the database is just a simple collection of domain objects.</p>
+
+<h3>The Interface (in Domain)</h3>
+<pre><code>public interface IBookingRepository
+{
+    Task AddAsync(Booking booking);
+    Task SaveAsync();
+    Task&lt;Booking?&gt; GetByIdAsync(Guid id);
+    Task&lt;List&lt;Booking&gt;&gt; GetPendingBookingsOlderThan(DateTime cutoff);
+    Task&lt;List&lt;Booking&gt;&gt; GetConfirmedUnpublishedBookings();
+}</code></pre>
+<p>The domain defines what queries it needs. The implementation — EF Core, SQL queries — lives in Infrastructure. Domain never references EF Core.</p>
+
+<h3>The Interface (in Domain)</h3>
+<pre><code>public interface IBookingRepository
+{
+    Task AddAsync(Booking booking);
+    Task SaveAsync();
+    Task&lt;Booking?&gt; GetByIdAsync(Guid id);
+    Task&lt;List&lt;Booking&gt;&gt; GetPendingBookingsOlderThan(DateTime cutoff);
+    Task&lt;List&lt;Booking&gt;&gt; GetConfirmedUnpublishedBookings();
+}</code></pre>
+<p>The domain defines what queries it needs. The implementation — EF Core, SQL queries — lives in Infrastructure. Domain never references EF Core.</p>
+
+<h3>Before → After: Creating a Booking</h3>
+<pre><code>// BEFORE — endpoint depended on EF Core directly
+app.MapPost("/book/{eventId}/{seatId}", async (BookingDbContext db, ...) =>
+{
+    var booking = new Booking { EventId = eventId, ... };
+    db.Bookings.Add(booking);
+    await db.SaveChangesAsync();
+});</code></pre>
+<pre><code>// AFTER — endpoint depends on the interface only
+app.MapPost("/book/{eventId}/{seatId}", async (IBookingRepository repository, ...) =>
+{
+    var booking = Booking.Domain.Booking.Create(eventId, seatId, userId);
+    await repository.AddAsync(booking);
+});</code></pre>
+
+<h3>Before → After: Confirming a Payment</h3>
+<pre><code>// BEFORE — raw EF Core + explicit transaction
+app.MapPost("/payments/{bookingId}/confirm", async (BookingDbContext db, ...) =>
+{
+    var booking = await db.Bookings.FindAsync(bookingId);
+    using var transaction = await db.Database.BeginTransactionAsync();
+    booking.Confirm();
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+});</code></pre>
+<pre><code>// AFTER — interface calls, no EF Core, no explicit transaction
+app.MapPost("/payments/{bookingId}/confirm", async (IBookingRepository repository, ...) =>
+{
+    var booking = await repository.GetByIdAsync(bookingId);
+    booking.Confirm();
+    await repository.SaveAsync();
+});</code></pre>
+<p>The explicit <code>BeginTransactionAsync / CommitAsync</code> was removed. <code>SaveChangesAsync</code> already wraps its work in an implicit database transaction — for a single-entity save, the explicit transaction was redundant. The implicit transaction guarantees: if SaveChanges fails, the booking stays Pending. No half-confirmed state.</p>
+
+<h3>Before → After: BookingExpiryWorker</h3>
+<pre><code>// BEFORE — worker resolved DbContext, wrote raw LINQ
+using var scope = _scopeFactory.CreateScope();
+var db = scope.ServiceProvider.GetRequiredService&lt;BookingDbContext&gt;();
+
+var expired = await db.Bookings
+    .Where(b => b.Status == "Pending" &amp;&amp; b.CreatedAt &lt; cutoff)
+    .ToListAsync(stoppingToken);
+
+foreach (var booking in expired)
+{
+    booking.Expire();
+}
+if (expired.Count > 0)
+    await db.SaveChangesAsync(stoppingToken); // one save after loop</code></pre>
+<pre><code>// AFTER — worker resolves the interface, calls named methods
+using var scope = _scopeFactory.CreateScope();
+var repository = scope.ServiceProvider.GetRequiredService&lt;IBookingRepository&gt;();
+
+var expired = await repository.GetPendingBookingsOlderThan(cutoff);
+
+foreach (var booking in expired)
+{
+    booking.Expire();
+}
+// One save after the loop — EF Core tracks all Expire() calls,
+// SaveAsync flushes all of them in a single roundtrip.
+if (expired.Count > 0)
+    await repository.SaveAsync();</code></pre>
+<p>The raw LINQ query (<code>db.Bookings.Where(...)</code>) moved into <code>BookingRepository.GetPendingBookingsOlderThan(cutoff)</code>. The worker has no idea how bookings are fetched. The single save <em>after</em> the loop is intentional — calling <code>SaveAsync()</code> inside the loop would make N database roundtrips instead of one. EF Core tracks all the <code>Expire()</code> changes in memory; one <code>SaveChangesAsync()</code> flushes them all.</p>
+
+<h3>Before → After: OutboxRelayWorker</h3>
+<pre><code>// BEFORE
+foreach (var booking in unpublished)
+{
+    // publish to RabbitMQ ...
+    booking.MarkPublished();
+    await db.SaveChangesAsync();
+}</code></pre>
+<pre><code>// AFTER
+foreach (var booking in unpublished)
+{
+    // publish to RabbitMQ ...
+    booking.MarkPublished();
+    await repository.SaveAsync(); // still saves per booking — intentional
+}</code></pre>
+<p>This worker deliberately saves inside the loop, unlike the ExpiryWorker. Reason: if the process crashes mid-loop, already-published bookings have their <code>PublishedAt</code> stamped — they won't be re-published on the next cycle. Crash safety outweighs batching here.</p>
+
+<h3>SaveAsync() — Why No Parameter?</h3>
+<pre><code>// Interface
+Task SaveAsync();
+
+// Implementation
+public async Task SaveAsync() =>
+    await _context.SaveChangesAsync();</code></pre>
+<p><code>SaveChangesAsync()</code> doesn't save a specific booking — it saves <strong>all changes tracked by the DbContext</strong>. Passing a <code>Booking</code> parameter would imply only that booking is saved, which is misleading. No parameter makes the API honest: "flush everything you're tracking." The caller's pattern is always: call a domain method to change state, then call <code>SaveAsync()</code> to persist those changes.</p>
+
+<h3>The "never use repository with EF Core" argument</h3>
+<p>The short version: <em>"There is literally no point. Just use the DbContext directly. You'll be fine."</em> DbContext is already a repository and Unit of Work. Adding an interface on top is an abstraction over an abstraction.</p>
+
+<p>Here is what the two approaches look like side by side:</p>
+
+<pre><code>// ── WITHOUT a repository — DbContext used directly ───────────────────
+app.MapPost("/payments/{bookingId}/confirm", async (
+    Guid bookingId,
+    BookingDbContext db) =>
+{
+    var booking = await db.Bookings.FindAsync(bookingId);
+    if (booking is null) return Results.NotFound();
+
+    booking.Confirm();
+    await db.SaveChangesAsync();
+    return Results.Ok();
+});
+
+// Need a new query? Write it inline — no interface change needed:
+var confirmed = await db.Bookings
+    .Where(b => b.Status == "Confirmed")
+    .AsNoTracking()
+    .Select(b => new { b.Id, b.SeatId })
+    .ToListAsync();</code></pre>
+
+<pre><code>// ── WITH a repository ─────────────────────────────────────────────────
+// The same new query requires a new method on the interface AND the implementation:
+
+// 1. Add to interface (Domain project):
+Task&lt;List&lt;BookingSummaryDto&gt;&gt; GetConfirmedSummaries();
+
+// 2. Implement it (Infrastructure project):
+public async Task&lt;List&lt;BookingSummaryDto&gt;&gt; GetConfirmedSummaries() =&gt;
+    await _context.Bookings
+        .Where(b => b.Status == "Confirmed")
+        .AsNoTracking()
+        .Select(b => new BookingSummaryDto(b.Id, b.SeatId))
+        .ToListAsync();
+
+// Every new query shape = new interface method + new implementation.
+// The interface grows indefinitely. With DbContext directly, you just write the query.</code></pre>
+
+<p>The repository implementation can absolutely use IQueryable, <code>AsNoTracking</code>, projections, and all EF Core features internally — the point isn't that those features are unavailable, it's that every distinct query shape still requires a dedicated method on the interface. The interface becomes a growing list of query methods, each defined once in Domain and implemented once in Infrastructure, for what could just be an inline LINQ query at the call site.</p>
+
+<div class="good">
+  <strong>Why it's implemented here anyway:</strong>
+  Clean Architecture's dependency rule: Domain cannot reference EF Core. <code>IBookingRepository</code> in Domain is the seam that enforces this boundary. Without it, workers and handlers would import <code>Microsoft.EntityFrameworkCore</code> directly. That is the architectural reason — not "we might swap ORMs."
+</div>
+
+<div class="interview">
+  <strong>Interview answer — "Walk me through how you abstracted data access":</strong>
+  "I introduced IBookingRepository in the Domain layer and implemented it with EF Core in Infrastructure. Before this, Program.cs was calling db.Bookings.Add() and db.SaveChangesAsync() directly — EF Core details leaked into the HTTP handlers. Now endpoints call repository.AddAsync() and repository.SaveAsync() — no EF Core anywhere in Program.cs or the workers. SaveAsync() takes no parameter because SaveChangesAsync saves all tracked changes, not a specific entity. There's a valid argument for just using DbContext directly — it's already a repository and unit of work, and every new query shape means a new interface method. I'd make that argument in a simpler project. Here the repository earns its existence because Domain cannot reference EF Core under the Clean Architecture dependency rule."
+</div>
+
+<!-- ══════════════════════════════ 10. UNIT OF WORK ══════════════════════════════ -->
+<h2 id="uow">10. Unit of Work — and the Nick Chapsas Debate</h2>
+
+<h3>What is the Unit of Work pattern?</h3>
+<p>Unit of Work is a pattern that answers one question: <em>when multiple things change in a single business operation, how do you ensure they are all saved together or not at all?</em></p>
+<p>The pattern works by tracking every object that was changed during an operation — created, modified, or deleted — and then flushing all of them to the database in one coordinated transaction when you say "commit". If anything fails, everything rolls back. No partial saves.</p>
+<p>Without it, you'd call the database once per change — booking created (1 DB call), status updated (2nd DB call), outbox event written (3rd DB call). If the process crashes between calls 2 and 3, the database is in an inconsistent state. Unit of Work wraps all three into one atomic operation.</p>
+
+<h3>How DbContext IS the Unit of Work</h3>
+<p>EF Core's <code>DbContext</code> implements the Unit of Work pattern natively. You don't need to build one. It works in three phases:</p>
+
+<table>
+  <thead><tr><th>Phase</th><th>What happens</th><th>In code</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>1. Track</strong></td>
+      <td>Every entity you load or add is registered in the change tracker — an in-memory dictionary of every object the DbContext knows about, along with its original vs current values</td>
+      <td><code>db.Bookings.Add(booking)</code> or loading via <code>FindAsync()</code></td>
+    </tr>
+    <tr>
+      <td><strong>2. Mutate</strong></td>
+      <td>You change properties on tracked entities in C#. EF Core detects the difference between the original snapshot and the new values automatically — you don't call any "mark as dirty" method</td>
+      <td><code>booking.Confirm()</code> sets <code>Status = "Confirmed"</code> — EF Core notices</td>
+    </tr>
+    <tr>
+      <td><strong>3. Flush</strong></td>
+      <td>One call generates and executes the SQL for every pending change in a single database transaction. All succeed or all roll back</td>
+      <td><code>await db.SaveChangesAsync()</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<pre><code>// The Unit of Work in action — three changes, one SaveChangesAsync
+var booking = await db.Bookings.FindAsync(id);   // tracked by EF Core
+booking.Confirm();                               // change tracked (no DB call yet)
+
+var outbox = new OutboxEvent(booking.Id, ...);
+db.OutboxEvents.Add(outbox);                     // added to tracker (no DB call yet)
+
+await db.SaveChangesAsync();
+// ↑ EF Core now generates two SQL statements inside ONE transaction:
+//   UPDATE Bookings SET Status='Confirmed' WHERE Id=...
+//   INSERT INTO OutboxEvents (...)
+// If either fails, both are rolled back.</code></pre>
+
+<p>This is exactly what <code>repository.SaveAsync()</code> calls under the hood in this project — it delegates to <code>db.SaveChangesAsync()</code>, which is the Unit of Work flush.</p>
+
+<h3>The Nick Chapsas debate — full breakdown</h3>
+<p>Nick Chapsas (a prominent .NET YouTuber) argues that wrapping EF Core in a repository pattern is adding an abstraction over something that is already a well-designed abstraction. His specific points:</p>
+
+<table>
+  <thead><tr><th>Argument</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>"DbContext is already a repository"</strong></td>
+      <td><code>db.Bookings</code> is a <code>DbSet&lt;Booking&gt;</code> — it already provides <code>Add</code>, <code>FindAsync</code>, <code>Where</code>, <code>Remove</code>. <code>IBookingRepository</code> wraps these with methods that do the same thing. You've written an abstraction on top of an abstraction for no new capability.</td>
+    </tr>
+    <tr>
+      <td><strong>"DbContext is already a Unit of Work"</strong></td>
+      <td>As shown above — the change tracker + <code>SaveChangesAsync</code> IS the Unit of Work. A separate <code>IUnitOfWork</code> interface wrapping it adds boilerplate without adding behaviour.</td>
+    </tr>
+    <tr>
+      <td><strong>"You're never actually swapping the database"</strong></td>
+      <td>The classic justification for the repository is "so you can swap EF Core for Dapper later." In practice this almost never happens — and when it does, the repository interface leaks so many EF Core assumptions (tracked entities, async patterns, <code>IQueryable</code> shapes) that it doesn't actually shield you.</td>
+    </tr>
+    <tr>
+      <td><strong>"You lose EF Core's best features"</strong></td>
+      <td>Behind a <code>GetByIdAsync(Guid id)</code> method, callers can't request projections (<code>.Select(b =&gt; new Dto(...))</code>), skip tracking (<code>.AsNoTracking()</code>), split queries, or write complex LINQ. You'd have to add a new method to the interface every time a new query shape is needed — the interface grows forever.</td>
+    </tr>
+    <tr>
+      <td><strong>"Unit testing argument is weaker than it looks"</strong></td>
+      <td>The repository is often justified as "it lets us mock the database in tests." But EF Core ships an in-memory provider and a SQLite in-memory mode — you can test against a real (lightweight) database without mocking. Mocking the repository hides bugs where your LINQ would fail against a real database.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>The counter-arguments — why teams still use it</h3>
+<table>
+  <thead><tr><th>Reason</th><th>When it holds</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Architectural boundary enforcement</strong></td>
+      <td>In Clean Architecture, Domain must not reference EF Core. <code>IBookingRepository</code> in Domain is the seam — it defines what the domain needs without naming how. Without it, workers and handlers would import <code>Microsoft.EntityFrameworkCore</code> directly, which breaks the dependency rule.</td>
+    </tr>
+    <tr>
+      <td><strong>Multiple database backends</strong></td>
+      <td>If the same interface needs SQL and MongoDB implementations (e.g. read from Mongo materialized view, write to SQL), a repository interface is the natural place to express that. DbContext only works with relational databases.</td>
+    </tr>
+    <tr>
+      <td><strong>Team consistency</strong></td>
+      <td>On large teams, named methods like <code>GetPendingBookingsOlderThan(cutoff)</code> are more discoverable and harder to misuse than raw LINQ scattered across handlers. The repository becomes a library of vetted query patterns.</td>
+    </tr>
+    <tr>
+      <td><strong>Testability via interface</strong></td>
+      <td>For unit testing domain logic in isolation — where you want zero database involvement — an interface you can mock or stub is simpler than configuring an in-memory EF Core provider. This project's <code>BookingExpiryWorker</code> logic could be unit-tested with a fake <code>IBookingRepository</code> that returns hardcoded data.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Why Catalog.API's repository doesn't add a Unit of Work</h3>
+<p>Catalog.API has a repository (<code>ICatalogRepository</code>) but no separate <code>IUnitOfWork</code> interface. The reason: <code>DbContext</code> is already the Unit of Work. Wrapping it in another interface would mean writing this:</p>
+
+<pre><code>// Pointless wrapper — all it does is delegate to DbContext
+public interface IUnitOfWork
+{
+    Task&lt;int&gt; SaveChangesAsync();
+}
+
+public class UnitOfWork : IUnitOfWork
+{
+    private readonly CatalogDbContext _context;
+    public UnitOfWork(CatalogDbContext context) => _context = context;
+
+    public Task&lt;int&gt; SaveChangesAsync() =&gt; _context.SaveChangesAsync();
+}
+</code></pre>
+
+<p>This is pure boilerplate. <code>DbContext.SaveChangesAsync()</code> already coordinates all tracked changes as a Unit of Work. Adding a wrapper class that calls it achieves nothing. Catalog.API instead calls <code>_context.SaveChangesAsync()</code> directly inside the repository implementation — the Unit of Work is being used, just without a redundant interface on top of it.</p>
+<p>Booking.API's <code>IBookingRepository.SaveAsync()</code> is the same idea expressed slightly differently — it hides the EF Core call behind the interface, but for an architectural reason (Domain cannot reference EF Core), not to introduce a separate Unit of Work pattern.</p>
+
+<div class="interview">
+  <strong>Interview answer — "What is the Unit of Work pattern and does EF Core implement it?"</strong><br/>
+  "Unit of Work tracks all changes made during a business operation and flushes them to the database in one transaction. EF Core's DbContext implements it natively — the change tracker records every mutation, and SaveChangesAsync commits them all atomically. I don't add a separate IUnitOfWork wrapper on top because DbContext already is one. Adding a wrapper just creates boilerplate that delegates straight through. Where I do use a repository interface — like IBookingRepository in Booking.API — it's to enforce the Clean Architecture boundary: Domain must not reference EF Core, so the interface lives in Domain and the EF Core implementation lives in Infrastructure."
+</div>
+
+<div class="interview">
+  <strong>Interview answer — "Do you agree with Nick Chapsas that you should never use a repository with EF Core?"</strong><br/>
+  "Mostly yes, in simple cases. DbContext is already a repository and unit of work — adding IRepository on top is wrapping an abstraction with another abstraction, and you lose EF Core features like projections, AsNoTracking, and IQueryable composability. The 'swap the database' argument rarely holds up in practice. But I'd use the repository interface when there's a genuine architectural reason — like Clean Architecture's dependency rule, where Domain cannot reference EF Core directly, or when the same interface needs multiple implementations across different storage backends. The key is that the interface earns its existence through a real constraint, not just as a habit from pre-EF patterns."
 </div>
 
 <div style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: #9ca3af; font-size: 12px;">

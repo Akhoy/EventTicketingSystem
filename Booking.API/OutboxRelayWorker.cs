@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
+using Booking.Domain;
 using RabbitMQ.Client;
 
 namespace Booking.API;
@@ -28,15 +28,12 @@ public class OutboxRelayWorker : BackgroundService
         {
             try
             {
+                // Workers are Singleton — create a new scope each cycle so IBookingRepository
+                // and its underlying DbContext have a clean, short lifetime per execution.
                 using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+                var repository = scope.ServiceProvider.GetRequiredService<IBookingRepository>();
 
-                // Status == "Confirmed" — payment is done, safe to hand off to the worker.
-                // PublishedAt == null  — not yet pushed to RabbitMQ, so the relay still has work to do.
-                // "Pending" bookings are intentionally excluded — seat is reserved but user hasn't paid yet.
-                var unpublished = await db.Bookings
-                    .Where(b => b.Status == "Confirmed" && b.PublishedAt == null)
-                    .ToListAsync(stoppingToken);
+                var unpublished = await repository.GetConfirmedUnpublishedBookings();
 
                 if (unpublished.Count > 0)
                 {
@@ -64,12 +61,12 @@ public class OutboxRelayWorker : BackgroundService
                             body: Encoding.UTF8.GetBytes(payload),
                             cancellationToken: stoppingToken);
 
-                        // Mark published so the next poll cycle skips this booking.
+                        // Mark published and save immediately — if the process crashes mid-loop,
+                        // already-published bookings won't be re-published on the next cycle.
                         booking.MarkPublished();
+                        await repository.SaveAsync();
                         _logger.LogInformation("Relayed booking to ticket_events — Seat: {SeatId}, User: {UserId}", booking.SeatId, booking.UserId);
                     }
-
-                    await db.SaveChangesAsync(stoppingToken);
                 }
             }
             catch (Exception ex)

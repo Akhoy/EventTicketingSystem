@@ -3,19 +3,19 @@ using System.Text.Json;
 using MongoDB.Driver;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using Catalog.Shared;
 
-namespace Catalog.API;
+namespace Catalog.Features.SyncBooking;
 
-public class CatalogSyncWorker: BackgroundService
+public class SyncBookingWorker : BackgroundService
 {
-    // This worker listens to RabbitMQ for events and syncs them to MongoDB
     private readonly IConfiguration _configuration;
-    private readonly ILogger<CatalogSyncWorker> _logger;
+    private readonly ILogger<SyncBookingWorker> _logger;
     private IConnection? _connection;
-    private IChannel? _channel;  
-
+    private IChannel? _channel;
     private IServiceScopeFactory _serviceScopeFactory;
-    public CatalogSyncWorker(IConfiguration configuration, ILogger<CatalogSyncWorker> logger, IServiceScopeFactory serviceScopeFactory)
+
+    public SyncBookingWorker(IConfiguration configuration, ILogger<SyncBookingWorker> logger, IServiceScopeFactory serviceScopeFactory)
     {
         _configuration = configuration;
         _logger = logger;
@@ -34,21 +34,20 @@ public class CatalogSyncWorker: BackgroundService
         await _channel.QueueDeclareAsync(queue: queueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
         await _channel.QueueBindAsync(queue: queueName, exchange: "ticket_events", routingKey: string.Empty, cancellationToken: stoppingToken);
 
-        _logger.LogInformation("🎧 Catalog API is successfully bound to the Event Bus!");
+        _logger.LogInformation("Catalog API is successfully bound to the Event Bus!");
 
         var consumer = new AsyncEventingBasicConsumer(_channel);
         consumer.ReceivedAsync += async (model, ea) =>
         {
             var body = ea.Body.ToArray();
             var message = Encoding.UTF8.GetString(body);
-            _logger.LogInformation("📩 Received event: {Message}", message);
+            _logger.LogInformation("Received event: {Message}", message);
 
-            // Parse the EventId so we decrement the right event, not a blind "first document".
             var bookingEvent = JsonSerializer.Deserialize<BookingEvent>(message);
             if (bookingEvent is not null && !string.IsNullOrEmpty(bookingEvent.EventId))
                 await UpdateMongoDatabaseAsync(bookingEvent.EventId);
             else
-                _logger.LogWarning("⚠️ Event message had no EventId, skipping: {Message}", message);
+                _logger.LogWarning("Event message had no EventId, skipping: {Message}", message);
 
             await _channel.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
         };
@@ -62,12 +61,6 @@ public class CatalogSyncWorker: BackgroundService
         using var scope = _serviceScopeFactory.CreateScope();
         var catalogRepository = scope.ServiceProvider.GetRequiredService<ICatalogRepository>();
         await catalogRepository.DecrementAvailableSeatsAsync(eventId);
-        _logger.LogInformation("✅ MongoDB has been updated based on the received event!");
+        _logger.LogInformation("MongoDB updated for event: {EventId}", eventId);
     }
 }
-
-// DTO (Data Transfer Object) — the message contract consumed from the "ticket_events" fanout.
-// This is the consumer's copy of the shape Booking.API publishes; it carries only the wire
-// fields, not Catalog's own CatalogItem entity. Kept in sync by hand with Booking.API's copy:
-// if a field is renamed there, rename it here too or deserialization binds it to null.
-public record BookingEvent(string EventId, string SeatId, string UserId);

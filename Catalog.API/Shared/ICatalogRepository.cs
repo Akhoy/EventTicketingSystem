@@ -1,3 +1,5 @@
+namespace Catalog.Shared;
+
 public interface ICatalogRepository
 {
     Task<long> GetCountAsync();

@@ -451,29 +451,48 @@
 <div class="service-box">
   <div class="service-header purple">Catalog.API</div>
   <div class="service-body">
-    <p>Owns the event catalogue and provides the public-facing seat availability for browsing.</p>
+    <p>Owns the event catalogue and provides the public-facing seat availability for browsing. Organised using <strong>Vertical Slice Architecture</strong> — code grouped by feature, not by technical role.</p>
+
+    <h4>Project structure (Vertical Slice)</h4>
+    <pre style="background:var(--code-bg,#1e1e2e);color:var(--code-fg,#cdd6f4);border-radius:8px;padding:14px 18px;font-size:12px;margin:10px 0 16px;overflow-x:auto;">Catalog.API/
+  Features/
+    GetItems/
+      GetItemsEndpoint.cs     ← GET /items endpoint
+    SyncBooking/
+      SyncBookingWorker.cs    ← consumes booking events from RabbitMQ
+      BookingEvent.cs         ← message contract (only SyncBooking uses this)
+    Seed/
+      CatalogSeeder.cs        ← seeds MongoDB + Redis on first startup
+  Shared/
+    CatalogItem.cs            ← document model (used by all features)
+    ICatalogRepository.cs     ← interface (used by all features)
+    CatalogRepository.cs      ← MongoDB implementation
+  Program.cs                  ← 25 lines: registration + two method calls</pre>
 
     <h4>Endpoints</h4>
     <table>
-      <thead><tr><th>Endpoint</th><th>What it does</th></tr></thead>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>File</th></tr></thead>
       <tbody>
-        <tr><td><code>GET /items</code></td><td>Returns all events with their current AvailableSeats from MongoDB</td></tr>
+        <tr><td><code>GET /items</code></td><td>Returns all events with their current AvailableSeats from MongoDB</td><td><code>Features/GetItems/GetItemsEndpoint.cs</code></td></tr>
       </tbody>
     </table>
 
     <h4>Background Workers</h4>
     <table>
-      <thead><tr><th>Worker</th><th>What it does</th></tr></thead>
+      <thead><tr><th>Worker</th><th>What it does</th><th>File</th></tr></thead>
       <tbody>
-        <tr><td><code>CatalogSyncWorker</code></td><td>Subscribes to <code>ticket_events</code> fanout. On each message, decrements <code>AvailableSeats</code> in MongoDB for the specific EventId.</td></tr>
+        <tr><td><code>SyncBookingWorker</code></td><td>Subscribes to <code>ticket_events</code> fanout. On each message, decrements <code>AvailableSeats</code> in MongoDB for the specific EventId.</td><td><code>Features/SyncBooking/SyncBookingWorker.cs</code></td></tr>
       </tbody>
     </table>
 
     <h4>Data stores</h4>
     <ul>
       <li><strong>MongoDB</strong> — document store for the event catalogue. AvailableSeats here is the <em>display</em> count — eventually consistent, not the booking gate.</li>
-      <li><strong>Redis</strong> — Catalog.API seeds the initial seat counters on startup. It owns the initial values; Booking.API owns the decrements thereafter.</li>
+      <li><strong>Redis</strong> — Catalog.API seeds the initial seat counters on startup via <code>CatalogSeeder</code>. It owns the initial values; Booking.API owns the decrements thereafter.</li>
     </ul>
+
+    <h4>Why Vertical Slice, not Clean Architecture?</h4>
+    <p>Catalog.API has three simple operations (fetch, sync, seed) and no domain rules. Clean Architecture would add Domain/Infrastructure/API project splits that don't earn their existence here. Vertical Slice keeps all code for each feature in one folder — adding a new feature means adding one folder and touching nothing else.</p>
   </div>
 </div>
 
@@ -769,6 +788,26 @@ if (remaining &lt; 0) { /* sold out — roll back */ }</code></pre>
     <strong>Why two guards?</strong> The capacity counter alone prevents overselling but allows two people
     to "book" seat A1 simultaneously (one would get a meaningless booking). The seat lock alone prevents
     duplicate A1 bookings but doesn't cap total bookings. You need both.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">Vertical Slice Architecture — Catalog.API</h3>
+    <span class="tag tag-pattern">Pattern</span>
+  </div>
+  <p>Catalog.API is organised by <strong>feature</strong>, not by technical role. Each feature is a folder containing all the code it needs — endpoint, worker, or seeder — in one place.</p>
+  <table>
+    <thead><tr><th>Horizontal (before)</th><th>Vertical Slice (after)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>Repositories/ICatalogRepository.cs</code><br/><code>Repositories/CatalogRepository.cs</code><br/><code>CatalogSyncWorker.cs</code><br/><code>Program.cs</code> (endpoint + seeding)</td>
+        <td><code>Features/GetItems/GetItemsEndpoint.cs</code><br/><code>Features/SyncBooking/SyncBookingWorker.cs</code><br/><code>Features/SyncBooking/BookingEvent.cs</code><br/><code>Features/Seed/CatalogSeeder.cs</code><br/><code>Shared/</code> (repository + model)</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="why">
+    <strong>Why here but not Booking.API?</strong> Catalog.API has three simple operations and no domain rules. Vertical Slice keeps it navigable without the overhead of Clean Architecture's project splits. Booking.API has complex business rules (Confirm/Expire, outbox, aggregate root) that justify the Domain/Infrastructure/API boundary — those rules need protection from infrastructure concerns. Different complexity → different structure.
   </div>
 </div>
 

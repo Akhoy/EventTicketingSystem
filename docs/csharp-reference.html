@@ -1293,6 +1293,123 @@ services.<span class="me">AddScoped</span>&lt;<span class="ty">IBookingRepositor
       Singleton can only hold Singletons. Scoped can hold Scoped or Singleton. Transient can hold anything. Violating this is a captive dependency — the shorter-lived service gets pinned to the longer-lived container and is never properly disposed.
     </div>
   </div>
+
+  <h3>Resolving Scoped from the root provider — and why it throws</h3>
+  <p><code>app.Services</code> is the <strong>root provider</strong> — it lives for the entire application lifetime. Resolving a Scoped service from it would mean that service is never disposed: no cleanup, no connection release, effectively a memory leak. ASP.NET Core prevents this by throwing at runtime rather than silently creating a leak.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>what happens when you resolve Scoped from root</span></div>
+    <pre><span class="cm">// ❌ app.Services IS the root provider — lives forever</span>
+<span class="kw">var</span> repo = app.Services.<span class="me">GetRequiredService</span>&lt;<span class="ty">ICatalogRepository</span>&gt;();
+<span class="cm">// Throws: System.InvalidOperationException:</span>
+<span class="cm">// Cannot resolve scoped service 'Catalog.Shared.ICatalogRepository' from root provider.</span>
+
+<span class="cm">// IConnectionMultiplexer is Singleton — root provider CAN resolve this:</span>
+<span class="kw">var</span> redis = app.Services.<span class="me">GetRequiredService</span>&lt;<span class="ty">IConnectionMultiplexer</span>&gt;(); <span class="cm">// ✅ fine</span></pre>
+  </div>
+  <p>The distinction: <strong>Singleton</strong> lives forever — safe to resolve from root. <strong>Scoped</strong> must have a controlled lifetime — requires a scope.</p>
+
+  <h3>Manual scope for startup code</h3>
+  <p>At startup (before any HTTP request), there is no request scope. If startup code needs a Scoped service, it creates a scope manually using <code>app.Services.CreateScope()</code>. The scope — and everything resolved from it — is disposed when the <code>using</code> block ends.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Catalog.API/Features/Seed/CatalogSeeder.cs</span></div>
+    <pre><span class="kw">public static async</span> <span class="ty">Task</span> <span class="me">SeedAsync</span>(<span class="ty">WebApplication</span> app)
+{
+    <span class="cm">// Create a temporary scope — gives Scoped services a controlled lifetime</span>
+    <span class="kw">using var</span> scope = app.Services.<span class="me">CreateScope</span>();
+
+    <span class="cm">// Resolve from the scope's provider — NOT from app.Services directly</span>
+    <span class="kw">var</span> catalogRepository = scope.ServiceProvider.<span class="me">GetRequiredService</span>&lt;<span class="ty">ICatalogRepository</span>&gt;();
+
+    <span class="cm">// IConnectionMultiplexer is Singleton — can resolve from either root or scope</span>
+    <span class="kw">var</span> redis = scope.ServiceProvider.<span class="me">GetRequiredService</span>&lt;<span class="ty">IConnectionMultiplexer</span>&gt;();
+
+    <span class="cm">// ... seeding logic ...</span>
+
+} <span class="cm">// using block ends → scope disposed → catalogRepository disposed → MongoDB connection released</span></pre>
+  </div>
+
+  <p>Two places in this codebase use manual scopes — for different reasons:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>CatalogSeeder (startup)</th><th>SyncBookingWorker (background worker)</th></tr></thead>
+      <tbody>
+        <tr><td><strong>When it runs</strong></td><td>Once at startup, before any request</td><td>Continuously — one scope per message received</td></tr>
+        <tr><td><strong>How it gets the scope</strong></td><td><code>app.Services.CreateScope()</code> — <code>app</code> is available at startup</td><td><code>_serviceScopeFactory.CreateScope()</code> — <code>IServiceScopeFactory</code> injected in constructor</td></tr>
+        <tr><td><strong>Why not constructor injection?</strong></td><td>Static class — no constructor</td><td>Worker is Singleton — can't inject Scoped directly (captive dependency)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>State — what it means</h3>
+  <p>State means <strong>data stored on an object that persists between method calls</strong>. In C#, state = instance fields.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>CatalogRepository has state</span></div>
+    <pre><span class="kw">public class</span> <span class="ty">CatalogRepository</span> : <span class="ty">ICatalogRepository</span>
+{
+    <span class="kw">private readonly</span> <span class="ty">IMongoDatabase</span> _database;   <span class="cm">// ← state: stored on the object</span>
+    <span class="kw">private readonly</span> <span class="ty">ILogger</span>&lt;<span class="ty">CatalogRepository</span>&gt; _logger; <span class="cm">// ← state</span>
+
+    <span class="kw">public</span> <span class="ty">CatalogRepository</span>(<span class="ty">IMongoDatabase</span> database, <span class="ty">ILogger</span>&lt;<span class="ty">CatalogRepository</span>&gt; logger)
+    {
+        _database = database;  <span class="cm">// set once in constructor</span>
+        _logger   = logger;    <span class="cm">// both fields are available to every method below</span>
+    }
+
+    <span class="kw">public</span> <span class="ty">Task</span>&lt;<span class="ty">List</span>&lt;<span class="ty">CatalogItem</span>&gt;&gt; <span class="me">GetAllAsync</span>() =>
+        _database.<span class="me">GetCollection</span>&lt;<span class="ty">CatalogItem</span>&gt;(<span class="st">"Tickets"</span>).<span class="me">Find</span>(_ => <span class="kw">true</span>).<span class="me">ToListAsync</span>();
+    <span class="cm">// ↑ uses _database — stored state. No parameter needed.</span>
+
+    <span class="kw">public</span> <span class="ty">Task</span> <span class="me">DecrementAvailableSeatsAsync</span>(<span class="ty">string</span> eventId)
+    {
+        <span class="kw">var</span> filter = <span class="ty">Builders</span>&lt;<span class="ty">CatalogItem</span>&gt;.Filter.<span class="me">Eq</span>(x => x.EventId, eventId);
+        <span class="kw">return</span> _database.<span class="me">GetCollection</span>&lt;<span class="ty">CatalogItem</span>&gt;(<span class="st">"Tickets"</span>)
+            .<span class="me">UpdateOneAsync</span>(filter, ...);
+    }
+    <span class="cm">// ↑ also uses _database — same stored state, different method</span>
+}</pre>
+  </div>
+  <p><code>_database</code> is set once in the constructor and then available to every method. That is state. Without it, every method would have to receive <code>IMongoDatabase</code> as a parameter — the caller would need to know the internal dependency. The constructor hides that.</p>
+
+  <h3>Static class vs instance class — the decision</h3>
+  <p>A <code>static</code> class cannot have instance fields. It cannot be instantiated with <code>new</code>. It cannot implement an interface. It is a named container for utility methods — nothing more.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>GetItemsEndpoint has no state — static is correct</span></div>
+    <pre><span class="kw">public static class</span> <span class="ty">GetItemsEndpoint</span>
+{
+    <span class="cm">// No fields. Nothing stored. The class holds no data between calls.</span>
+    <span class="kw">public static void</span> <span class="me">Register</span>(<span class="ty">WebApplication</span> app)
+    {
+        app.<span class="me">MapGet</span>(<span class="st">"/items"</span>, <span class="kw">async</span> (<span class="ty">ICatalogRepository</span> catalogRepository) =>
+        {
+            <span class="cm">// catalogRepository is injected per-request by ASP.NET Core (parameter injection)</span>
+            <span class="cm">// it is NOT stored on GetItemsEndpoint — the class itself holds nothing</span>
+            <span class="kw">var</span> tickets = <span class="kw">await</span> catalogRepository.<span class="me">GetAllAsync</span>();
+            <span class="kw">return</span> <span class="ty">Results</span>.<span class="me">Ok</span>(tickets);
+        });
+    }
+}</pre>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Question</th><th>If yes →</th></tr></thead>
+      <tbody>
+        <tr><td>Does it need to hold state (instance fields)?</td><td>Instance class</td></tr>
+        <tr><td>Does it need to implement an interface?</td><td>Instance class (static classes cannot implement interfaces)</td></tr>
+        <tr><td>Does it need to be registered with DI and injected?</td><td>Instance class</td></tr>
+        <tr><td>Does it need to be testable via a fake/mock?</td><td>Instance class</td></tr>
+        <tr><td>None of the above — it's a utility with no stored data?</td><td>Static class</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Static ≠ untestable in all cases</strong>
+      A static class whose methods only use parameters (nothing stored, no globals) is perfectly testable — you just call the method with test inputs. The testability problem arises when a static class holds global state or creates its own dependencies internally. <code>GetItemsEndpoint.Register(app)</code> with a real test <code>WebApplication</code> is testable — it just isn't the kind of logic you'd unit test in isolation.
+    </div>
+  </div>
 </section>
 
 <!-- ══════════════════════════════════════════════ -->

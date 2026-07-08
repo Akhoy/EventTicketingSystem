@@ -97,6 +97,7 @@
     <li><a href="#clean-arch">Clean Architecture</a></li>
     <li><a href="#repository">Repository Pattern</a></li>
     <li><a href="#uow">Unit of Work — and the Nick Chapsas Debate</a></li>
+    <li><a href="#vsa">Vertical Slice Architecture</a></li>
   </ol>
 </div>
 
@@ -900,6 +901,130 @@ public class UnitOfWork : IUnitOfWork
 <div class="interview">
   <strong>Interview answer — "Do you agree with Nick Chapsas that you should never use a repository with EF Core?"</strong><br/>
   "Mostly yes, in simple cases. DbContext is already a repository and unit of work — adding IRepository on top is wrapping an abstraction with another abstraction, and you lose EF Core features like projections, AsNoTracking, and IQueryable composability. The 'swap the database' argument rarely holds up in practice. But I'd use the repository interface when there's a genuine architectural reason — like Clean Architecture's dependency rule, where Domain cannot reference EF Core directly, or when the same interface needs multiple implementations across different storage backends. The key is that the interface earns its existence through a real constraint, not just as a habit from pre-EF patterns."
+</div>
+
+<!-- ══════════════════════════════ 11. VERTICAL SLICE ARCHITECTURE ══════════════════════════════ -->
+<h2 id="vsa">11. Vertical Slice Architecture</h2>
+
+<h3>The core idea</h3>
+<p>Vertical Slice Architecture organises code by <strong>feature</strong> — what the code does — rather than by <strong>technical role</strong> — what kind of thing it is. Each feature gets its own folder containing everything it needs.</p>
+<p>The name comes from the image of slicing through layers. A horizontal layer (Controllers, Repositories, Models) spans the whole app. A vertical slice cuts through all layers for just one feature.</p>
+
+<h3>Horizontal layers — the default</h3>
+<p>The traditional approach groups files by technical role:</p>
+<pre><code>Catalog.API/               ← BEFORE (horizontal)
+  CatalogItem.cs           ← all models together
+  CatalogSyncWorker.cs     ← all workers together
+  Program.cs               ← endpoint + seeding + wiring mixed together
+  Repositories/
+    ICatalogRepository.cs  ← all repositories together
+    CatalogRepository.cs</code></pre>
+
+<p><strong>The problem:</strong> when you want to understand or change the "sync booking" feature, you read <code>CatalogSyncWorker.cs</code>, then jump to <code>Repositories/</code> for the data access, and then back to <code>Program.cs</code> for the endpoint. Code for one feature is scattered across multiple folders. Adding a new feature means touching multiple folders.</p>
+<p>The folder structure tells you <em>what kinds of things exist</em>, not <em>what the system actually does</em>.</p>
+
+<h3>Vertical slices — organised by feature</h3>
+<pre><code>Catalog.API/               ← AFTER (vertical slices)
+  Features/
+    GetItems/
+      GetItemsEndpoint.cs  ← everything for "GET /items" in one place
+    SyncBooking/
+      SyncBookingWorker.cs ← everything for consuming booking events
+      BookingEvent.cs      ← message contract — only SyncBooking uses this
+    Seed/
+      CatalogSeeder.cs     ← everything for startup seeding
+  Shared/
+    CatalogItem.cs         ← used by ALL features — lives in Shared/
+    ICatalogRepository.cs  ← used by ALL features
+    CatalogRepository.cs   ← used by ALL features
+  Program.cs               ← 25 lines: just wiring and two method calls</code></pre>
+
+<p><strong>The benefit:</strong> to understand or change "sync booking", you open <code>Features/SyncBooking/</code> and everything is there. Adding a new feature means adding one new folder and touching nothing else. The folder structure tells you exactly what the system does at a glance.</p>
+
+<div class="good">
+  <strong>The test:</strong> Can a new developer open the project and understand what it does just from the folder structure? With horizontal layers: no — they see "Repositories", "Models", "Workers" which describes the architecture, not the business. With vertical slices: yes — they see "GetItems", "SyncBooking", "Seed" which describes the features.
+</div>
+
+<h3>What goes in Shared/?</h3>
+<p><code>Shared/</code> holds things used by <strong>more than one feature</strong>. The rule is strict: if only one feature uses something, it lives inside that feature's folder. If multiple features use it, it lives in <code>Shared/</code>.</p>
+<table>
+  <thead><tr><th>File</th><th>Where it lives</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><code>BookingEvent.cs</code></td><td><code>Features/SyncBooking/</code></td><td>Only SyncBookingWorker consumes it — nothing else needs it</td></tr>
+    <tr><td><code>ICatalogRepository.cs</code></td><td><code>Shared/</code></td><td>GetItems, SyncBooking, and Seed all use it</td></tr>
+    <tr><td><code>CatalogItem.cs</code></td><td><code>Shared/</code></td><td>Referenced by the repository and all three features</td></tr>
+  </tbody>
+</table>
+
+<h3>Static classes in vertical slices</h3>
+<p>Feature files like <code>GetItemsEndpoint</code> and <code>CatalogSeeder</code> are static classes. This is intentional. A static class has <strong>no state</strong> — no instance fields — and cannot be instantiated with <code>new</code>. It's a container for utility methods, not an object with behaviour.</p>
+<p>State means instance fields — data stored on an object between method calls. <code>GetItemsEndpoint</code> holds nothing. It has one job: register a route at startup. Once done, it's never used again. Static makes that explicit.</p>
+<p>Contrast with <code>CatalogRepository</code>, which holds <code>_database</code> and <code>_logger</code> as instance fields. Those are state. The repository must be an instance class so the DI container can inject dependencies into it and so it can implement the <code>ICatalogRepository</code> interface (static classes cannot implement interfaces).</p>
+
+<table>
+  <thead><tr><th></th><th>GetItemsEndpoint (static)</th><th>CatalogRepository (instance)</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Instance fields?</strong></td><td>None</td><td><code>_database</code>, <code>_logger</code></td></tr>
+    <tr><td><strong>Implements interface?</strong></td><td>No</td><td>Yes — <code>ICatalogRepository</code></td></tr>
+    <tr><td><strong>Injected via DI?</strong></td><td>No — called directly at startup</td><td>Yes — registered as <code>AddScoped</code></td></tr>
+    <tr><td><strong>Testable in isolation?</strong></td><td>Not needed — startup utility</td><td>Yes — via fake <code>ICatalogRepository</code></td></tr>
+    <tr><td><strong>Can be static?</strong></td><td>Yes</td><td>No</td></tr>
+  </tbody>
+</table>
+
+<div class="why">
+  <strong>The decision rule:</strong> If a class needs to hold state (fields), implement an interface, or be injected via DI — it must be an instance class. If it holds nothing, implements no interface, and is called directly — static is the right choice.
+</div>
+
+<h3>Program.cs — before and after</h3>
+<pre><code>// BEFORE — 55 lines: registration + seeding logic + endpoint all inline
+var builder = WebApplication.CreateBuilder(args);
+// ... registration ...
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    // 20 lines of seeding logic here
+}
+
+app.MapGet("/items", async (ICatalogRepository catalogRepository) =>
+{
+    var tickets = await catalogRepository.GetAllAsync();
+    return Results.Ok(tickets);
+});
+app.Run();</code></pre>
+
+<pre><code>// AFTER — 25 lines: just wiring
+var builder = WebApplication.CreateBuilder(args);
+// ... registration ...
+builder.Services.AddScoped&lt;ICatalogRepository, CatalogRepository&gt;();
+builder.Services.AddHostedService&lt;SyncBookingWorker&gt;();
+
+var app = builder.Build();
+
+await CatalogSeeder.SeedAsync(app);   // seeding moved to Features/Seed/
+GetItemsEndpoint.Register(app);       // endpoint moved to Features/GetItems/
+
+app.Run();</code></pre>
+
+<p><code>Program.cs</code> now only answers: what services exist and how do they wire together. The <em>what they do</em> is in the feature folders.</p>
+
+<h3>VSA vs Clean Architecture — when to use each</h3>
+<table>
+  <thead><tr><th></th><th>Vertical Slice Architecture</th><th>Clean Architecture</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Organises by</strong></td><td>Feature</td><td>Technical layer (Domain / Infrastructure / API)</td></tr>
+    <tr><td><strong>Best for</strong></td><td>CRUD-heavy services, simple business rules, small teams</td><td>Complex domain with many business rules, strict dependency boundaries needed</td></tr>
+    <tr><td><strong>Trade-off</strong></td><td>Fast to navigate. Shared code can drift if not disciplined.</td><td>Strong boundaries. More boilerplate. Justifies itself with complex domain logic.</td></tr>
+    <tr><td><strong>In this project</strong></td><td>Catalog.API — simple read model, three operations, no domain rules</td><td>Booking.API — Confirm/Expire rules, outbox pattern, aggregate root</td></tr>
+  </tbody>
+</table>
+
+<p>They are not mutually exclusive. A system can use VSA for some services and Clean Architecture for others — each service picks the structure that fits its complexity. The mistake is applying Clean Architecture everywhere out of habit, or using VSA for a service that genuinely needs domain protection.</p>
+
+<div class="interview">
+  <strong>Interview answer — "How did you structure Catalog.API and why?"</strong><br/>
+  "Catalog.API uses Vertical Slice Architecture — code organised by feature rather than by technical role. Features/GetItems has the endpoint, Features/SyncBooking has the worker and its message contract, Features/Seed has startup seeding. Adding a new feature means adding one folder and touching nothing else. I chose this over Clean Architecture because Catalog.API has simple operations with no domain rules — it's a read model that syncs from booking events. Clean Architecture would add boundaries and layers that don't earn their existence here. Booking.API is the opposite — Confirm/Expire rules, aggregate root, outbox pattern — so it uses Clean Architecture with separate Domain, Infrastructure, and API projects."
 </div>
 
 <div style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: #9ca3af; font-size: 12px;">

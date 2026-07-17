@@ -880,11 +880,66 @@ _context.Bookings.<span class="me">FindAsync</span>(id)
     <span class="kw">await</span> repository.<span class="me">SaveAsync</span>();</pre>
   </div>
 
+  <h3>IEnumerable vs IQueryable — why they're different</h3>
+  <p>Two different signatures, two different languages, two different places the code runs:</p>
+  <ul>
+    <li><strong>LINQ-to-Objects (IEnumerable)</strong> — your lambda compiles into a <strong>delegate</strong> (a real C# function pointer). The loop calls this function for each item, in memory. The data must already exist to loop over it.</li>
+    <li><strong>LINQ-to-Entities (IQueryable)</strong> — your lambda compiles into an <strong>expression tree</strong> (a data structure that describes the query without running it). EF Core walks the tree and translates it into SQL. The database executes it.</li>
+  </ul>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>The signatures say it all</span></div>
+    <pre><span class="cm">// IEnumerable.Where — takes a compiled DELEGATE</span>
+<span class="kw">public static</span> <span class="ty">IEnumerable</span>&lt;<span class="ty">T</span>&gt; <span class="me">Where</span>(<span class="kw">this</span> <span class="ty">IEnumerable</span>&lt;<span class="ty">T</span>&gt; source, <span class="ty">Func</span>&lt;<span class="ty">T</span>, <span class="kw">bool</span>&gt; predicate)
+<span class="cm">//                                                        ^^^^^^^^^^^^^^^^^^^^^^^^</span>
+<span class="cm">//                                                        a DELEGATE — real executable C# code</span>
+
+<span class="cm">// IQueryable.Where — takes an EXPRESSION TREE</span>
+<span class="kw">public static</span> <span class="ty">IQueryable</span>&lt;<span class="ty">T</span>&gt; <span class="me">Where</span>(<span class="kw">this</span> <span class="ty">IQueryable</span>&lt;<span class="ty">T</span>&gt; source, <span class="ty">Expression</span>&lt;<span class="ty">Func</span>&lt;<span class="ty">T</span>, <span class="kw">bool</span>&gt;&gt; predicate)
+<span class="cm">//                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>
+<span class="cm">//                                                        an EXPRESSION TREE — data describing code, not code itself</span>
+    </pre>
+  </div>
+  <p><strong>The practical difference:</strong> a delegate is a function that runs immediately when you call it; an expression tree is a data structure that EF Core walks and translates into SQL:</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Same lambda, different timing and location</span></div>
+    <pre><span class="cm">// IQueryable — expression tree is built but NOT executed</span>
+<span class="kw">var</span> query = db.Bookings.<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>);
+<span class="cm">// Right now: no database call, no filtering. Just a tree sitting in memory saying</span>
+<span class="cm">// "when you ask for results, filter by Status = Confirmed".</span>
+
+<span class="kw">var</span> results = <span class="kw">await</span> query.<span class="me">ToListAsync</span>();
+<span class="cm">// NOW: EF Core reads the tree, produces SQL, runs it in the DB, only matching rows return</span>
+
+<span class="cm">// IEnumerable — delegate is executed immediately on every call</span>
+<span class="kw">var</span> all = repository.<span class="me">GetAll</span>();
+<span class="cm">// Right now: "SELECT * FROM Bookings" already ran. ALL 5 million rows are in memory.</span>
+
+<span class="kw">var</span> results = all.<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>).<span class="me">ToList</span>();
+<span class="cm">// The delegate runs in C#, looping through 5M objects already loaded, keeping only 2</span>
+    </pre>
+  </div>
+  <p><strong>Where the difference matters — same query, opposite behavior:</strong></p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>IQueryable (database filters) vs IEnumerable (app filters)</span></div>
+    <pre><span class="cm">// IQueryable — the .Where() call becomes part of the SQL</span>
+<span class="kw">var</span> query = db.Bookings                              <span class="cm">// db.Bookings is IQueryable</span>
+    .<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>);       <span class="cm">// builds a tree, no DB call yet</span>
+<span class="kw">var</span> results = <span class="kw">await</span> query.<span class="me">ToListAsync</span>();        <span class="cm">// NOW: EF translates tree to SQL</span>
+<span class="cm">// Sent to database: SELECT * FROM Bookings WHERE Status = 'Confirmed'</span>
+<span class="cm">// Returns: 2 rows (only the matching ones)</span>
+
+<span class="cm">// IEnumerable — all data is already fetched before the .Where() is called</span>
+<span class="kw">var</span> all = repository.<span class="me">GetAll</span>();                    <span class="cm">// runs immediately, returns List&lt;T&gt;</span>
+<span class="cm">// Already in memory: 5 million rows</span>
+<span class="kw">var</span> results = all                                       <span class="cm">// delegates run in C#</span>
+    .<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>)          <span class="cm">// loops 5M rows, keeps 2</span>
+    .<span class="me">ToList</span>();
+    </pre>
+  </div>
   <div class="callout note">
     <div class="callout-icon">💡</div>
     <div class="callout-body">
-      <strong>IEnumerable vs IQueryable</strong>
-      <code>Where</code> on an <code>IQueryable&lt;T&gt;</code> (EF Core) builds a SQL query — the filter runs in the database. <code>Where</code> on an <code>IEnumerable&lt;T&gt;</code> (in-memory list) runs in C#, loading all rows first. Always use <code>IQueryable</code> with EF Core for filtered queries.
+      <strong>Rule:</strong> With EF Core, you want your filtering in SQL, not C#. That means always use <code>IQueryable</code>. The moment a method returns <code>IEnumerable</code> or <code>List&lt;T&gt;</code>, the data is already fetched and in memory — any <code>.Where()</code> after that filters in C# on rows that already exist.
     </div>
   </div>
 
@@ -1408,6 +1463,35 @@ services.<span class="me">AddScoped</span>&lt;<span class="ty">IBookingRepositor
     <div class="callout-body">
       <strong>Static ≠ untestable in all cases</strong>
       A static class whose methods only use parameters (nothing stored, no globals) is perfectly testable — you just call the method with test inputs. The testability problem arises when a static class holds global state or creates its own dependencies internally. <code>GetItemsEndpoint.Register(app)</code> with a real test <code>WebApplication</code> is testable — it just isn't the kind of logic you'd unit test in isolation.
+    </div>
+  </div>
+
+  <h3>Dependency Injection vs Dependency Inversion — don't conflate them</h3>
+  <p>Near-identical names, different things. <strong>Injection</strong> is the mechanism on this page — the container hands a class what it needs. <strong>Inversion</strong> is an architectural principle (the "D" in SOLID) about which direction dependencies point. DI is usually <em>how</em> you achieve DIP, but they are independent.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>Dependency <strong>Injection</strong> (DI)</th><th>Dependency <strong>Inversion</strong> (DIP)</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Kind</strong></td><td>A technique / mechanism</td><td>A design principle</td></tr>
+        <tr><td><strong>Answers</strong></td><td>How does an object get its dependencies?</td><td>Which way should dependencies point?</td></tr>
+        <tr><td><strong>Lives in</strong></td><td>Constructors, parameters, the container</td><td>Interfaces and layer boundaries</td></tr>
+        <tr><td><strong>In this project</strong></td><td><code>AddScoped&lt;IBookingRepository, BookingRepository&gt;()</code> + constructor injection</td><td><code>IBookingRepository</code> lives in Domain; EF Core impl lives in Infrastructure</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Injection without inversion — DI, but DIP violated</span></div>
+    <pre><span class="cm">// The container injects it (that's DI)…</span>
+<span class="kw">public class</span> <span class="ty">BookingService</span>(<span class="ty">BookingRepository</span> repo)   <span class="cm">// …but depends on a CONCRETE low-level type.</span>
+{                                                <span class="cm">// DIP is NOT satisfied — no abstraction, no inverted arrow.</span>
+    <span class="kw">private readonly</span> <span class="ty">BookingRepository</span> _repo = repo;
+}</pre>
+  </div>
+  <div class="callout note">
+    <div class="callout-icon">🧭</div>
+    <div class="callout-body">
+      <strong>One-liner</strong>
+      Inversion = <em>which way the arrows point</em> (put the interface in the inner layer). Injection = <em>who hands over the object</em> (don't <code>new</code> your own dependencies). The interface is the hinge both turn on. Full architectural treatment: see §13 of the System Design Concepts reference.
     </div>
   </div>
 </section>

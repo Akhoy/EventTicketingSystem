@@ -98,6 +98,9 @@
     <li><a href="#repository">Repository Pattern</a></li>
     <li><a href="#uow">Unit of Work — and the Nick Chapsas Debate</a></li>
     <li><a href="#vsa">Vertical Slice Architecture</a></li>
+    <li><a href="#ladder">The Repository Ladder — 9 Patterns in One Debate</a></li>
+    <li><a href="#di-vs-dip">Dependency Injection vs Dependency Inversion</a></li>
+    <li><a href="#aggregate-repo">Why the Aggregate Is the Ideal Unit for a Repository</a></li>
   </ol>
 </div>
 
@@ -394,12 +397,30 @@ booking.Status = null;          // crashes later</code></pre>
 
 <p><code>private set</code> means nothing outside the class can assign to Status. <code>Confirm()</code> is the only door in. The compiler enforces this — trying to do <code>booking.Status = "Confirmed"</code> directly is a compile error on every single build. A code review is a human reading code — a human can miss a line. The compiler cannot. You physically cannot ship the mistake.</p>
 
-<h3>The Four Core Concepts</h3>
+<h3>The Core Concepts</h3>
+
+<div class="concept-card">
+  <h4>Aggregate</h4>
+  <p>A cluster of related objects that you treat as <strong>one single unit</strong> — loaded together, saved together, and kept correct together. One object in the cluster is the <strong>aggregate root</strong> (below); the rest are its children.</p>
+  <p><strong>Plain English:</strong> An <code>Order</code> and its <code>OrderLine</code>s form one aggregate. You never deal with a lone order line — you always work with the whole order.</p>
+  <p>An aggregate is defined by <strong>two boundaries</strong> that turn out to be the same boundary:</p>
+  <ul>
+    <li><strong>Consistency boundary</strong> — the group of things that must always stay correct <em>with each other</em>. Example: an order's total must equal the sum of its lines. That rule can only be guaranteed if the order and its lines are treated as one unit.</li>
+    <li><strong>Transaction boundary</strong> — because those things must stay correct together, they must also be <em>saved</em> together, in one all-or-nothing database transaction. Save half of them and the rule breaks.</li>
+  </ul>
+  <p>So the full definition is simply: <em>an aggregate is the smallest group of objects that must be correct together (the consistency boundary), and therefore must be saved together (the transaction boundary).</em> The two boundaries line up exactly — that <em>is</em> the idea.</p>
+  <p><strong>Two rules that fall straight out of this:</strong></p>
+  <ul>
+    <li><strong>One repository per aggregate root</strong> — you load and save whole aggregates, so there's an <code>OrderRepository</code> but never an <code>OrderLineRepository</code>. (Full explanation in <a href="#aggregate-repo">§14</a>.)</li>
+    <li><strong>Keep aggregates small</strong> — one aggregate = one transaction, so a huge aggregate makes the database lock a huge amount of data on every change. If an aggregate grows to thousands of rows, the boundary is usually drawn too wide: split the children into their own aggregates and link them by ID.</li>
+  </ul>
+  <p><strong>Where the terms come from:</strong> Eric Evans, <em>Domain-Driven Design</em> (2003); sharpened by Vaughn Vernon's <em>Effective Aggregate Design</em>. Your <code>Booking</code> is the simplest possible aggregate — it owns no children, so the whole aggregate is just the one object.</p>
+</div>
 
 <div class="concept-card">
   <h4>Aggregate Root</h4>
-  <p>An object that controls its own state. The <strong>only entry point</strong> for changes — no side door. Your <code>Booking</code> class is one.</p>
-  <p><strong>Plain English:</strong> You can't reach <code>SeatId</code> or <code>Status</code> and change them directly — you have to go through a method on <code>Booking</code>. Because all changes go through the same door, all the rules stay intact. There's no way around them.</p>
+  <p>The <strong>one object in an aggregate that outside code is allowed to touch</strong> — the single entry point for changes, with no side door. Your <code>Booking</code> class is one.</p>
+  <p><strong>Plain English:</strong> You can't reach <code>SeatId</code> or <code>Status</code> and change them directly — you have to go through a method on <code>Booking</code>. Because every change goes through the same door, all the rules stay intact. There's no way around them. (In the <code>Order</code> example, <code>Order</code> is the root; you go through it to touch a line, never straight to the line.)</p>
 </div>
 
 <div class="concept-card">
@@ -605,17 +626,6 @@ return await _context.Bookings.FindAsync(id);  // SQL Server, EF Core, connectio
 booking.Confirm();                                 // 2. domain behaviour — nothing to do with repository
 await repository.SaveAsync();                      // 3. repository persists the change</code></pre>
 <p>Martin Fowler named and defined the pattern in 2002: <em>"a mechanism for encapsulating storage, retrieval, and search behaviour, which emulates a collection of objects."</em> Every developer since has used the same word for the same idea — so when you see <code>IBookingRepository</code> you immediately know what it is without reading the code. The name is convention. The actual value is the interface that lets everything else pretend the database is just a simple collection of domain objects.</p>
-
-<h3>The Interface (in Domain)</h3>
-<pre><code>public interface IBookingRepository
-{
-    Task AddAsync(Booking booking);
-    Task SaveAsync();
-    Task&lt;Booking?&gt; GetByIdAsync(Guid id);
-    Task&lt;List&lt;Booking&gt;&gt; GetPendingBookingsOlderThan(DateTime cutoff);
-    Task&lt;List&lt;Booking&gt;&gt; GetConfirmedUnpublishedBookings();
-}</code></pre>
-<p>The domain defines what queries it needs. The implementation — EF Core, SQL queries — lives in Infrastructure. Domain never references EF Core.</p>
 
 <h3>The Interface (in Domain)</h3>
 <pre><code>public interface IBookingRepository
@@ -1025,6 +1035,447 @@ app.Run();</code></pre>
 <div class="interview">
   <strong>Interview answer — "How did you structure Catalog.API and why?"</strong><br/>
   "Catalog.API uses Vertical Slice Architecture — code organised by feature rather than by technical role. Features/GetItems has the endpoint, Features/SyncBooking has the worker and its message contract, Features/Seed has startup seeding. Adding a new feature means adding one folder and touching nothing else. I chose this over Clean Architecture because Catalog.API has simple operations with no domain rules — it's a read model that syncs from booking events. Clean Architecture would add boundaries and layers that don't earn their existence here. Booking.API is the opposite — Confirm/Expire rules, aggregate root, outbox pattern — so it uses Clean Architecture with separate Domain, Infrastructure, and API projects."
+</div>
+
+<!-- ══════════════════════════════ 12. THE REPOSITORY LADDER ══════════════════════════════ -->
+<h2 id="ladder">12. The Repository Ladder — 9 Patterns in One Debate</h2>
+
+<p>A famous r/dotnet argument — <em>"Why is the Generic Repository still the default in .NET tutorials?"</em> — looks like people fighting about one thing. It's really <strong>nine different patterns stacked in a ladder</strong>, and the people arguing are each standing on a different rung. Each rung fixes a problem the rung below it caused. Once you see the ladder, the whole argument makes sense — and you'll know which rung fits your own project.</p>
+<p>Don't try to memorise this table — it's just a map of the journey. Each rung is explained in plain language below.</p>
+
+<h3>The whole ladder at a glance</h3>
+<table>
+  <thead><tr><th>#</th><th>Rung</th><th>The problem it fixes (created by the rung below it)</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>Active Record</strong></td><td>Starting point — the object saves itself.</td></tr>
+    <tr><td>2</td><td><strong>Repository</strong></td><td>Rules and saving are stuck together, so you can't test a rule without a database.</td></tr>
+    <tr><td>3</td><td><strong>Generic Repository</strong> <span class="tag" style="background:#fee2e2;color:#991b1b;">hated</span></td><td>You keep copy-pasting the same Save/GetById/GetAll for every object.</td></tr>
+    <tr><td>4</td><td><strong>Specific Repository</strong></td><td>The generic one is too dumb to ask real questions (or it leaks LINQ).</td></tr>
+    <tr><td>5</td><td><strong>Rich Domain Model / Aggregate</strong></td><td>The object is wide open — nothing stops bad data being set.</td></tr>
+    <tr><td>6</td><td><strong>CQRS</strong></td><td>Full aggregates are heavy to <em>read</em> — too much just to show a list.</td></tr>
+    <tr><td>7</td><td><strong>Clean Architecture</strong></td><td>All these pieces need a home, and what depends on what needs a rule.</td></tr>
+    <tr><td>8</td><td><strong>Write-Only Repository</strong></td><td>In practice: make the repository write-only; read through a separate query path.</td></tr>
+    <tr><td>9</td><td><strong>Reusable Reads (Extension Methods)</strong></td><td>Reads skip the repo — so where does shared query logic go? Into small reusable helper methods.</td></tr>
+  </tbody>
+</table>
+
+<h3>Rung 1 → Active Record</h3>
+<p>The simplest possible design: the object holds its data <em>and</em> knows how to store itself. State-changing methods persist themselves.</p>
+<pre><code>public class Booking
+{
+    public string Status = "Pending";
+
+    public void Confirm()
+    {
+        if (Status == "Expired")
+            throw new InvalidOperationException("Cannot confirm expired booking.");
+        Status = "Confirmed";
+        Database.Write(this);   // ← the method saves ITSELF. That's Active Record.
+    }
+}</code></pre>
+<p><strong>The problem:</strong> say you just want to test one rule — "confirming a pending booking makes it Confirmed." You can't, because <code>Confirm()</code> also writes to the database at the end. So testing that one small rule forces you to set up a whole database. The rule and the saving are glued together in the same method.</p>
+
+<h3>Rung 2 → Repository</h3>
+<p>Cut the storage <em>out</em> of the object into a separate class. The booking goes back to being pure data + rules; a repository owns persistence.</p>
+<pre><code>public class Booking
+{
+    public string Status = "Pending";   // NO Save(). It doesn't know the DB exists.
+}
+
+public class BookingRepository
+{
+    public void Save(Booking booking) => Database.Write(booking);   // storage lives HERE
+}</code></pre>
+<p>A "repository" is literally <em>a place things are kept</em> — hand it an object to store, or ask it to fetch one back. Now the booking is testable in isolation because it no longer references the database. <strong>The pain it leaves:</strong> you have Booking, Event, User, Payment… and you're copy-pasting the same <code>Save/GetById/GetAll</code> for each one.</p>
+
+<h3>Rung 3 → Generic Repository <span class="tag" style="background:#fee2e2;color:#991b1b;">the trap</span></h3>
+<p>Write it once with a type parameter, reuse for every entity:</p>
+<pre><code>public class Repository&lt;T&gt;                       // T = Booking, Event, User…
+{
+    public void Save(T entity)   =&gt; Database.Write(entity);
+    public T    GetById(int id)  =&gt; Database.Find&lt;T&gt;(id);
+    public List&lt;T&gt; GetAll()      =&gt; Database.ReadAll&lt;T&gt;();
+}</code></pre>
+<p>Feels like a win — no more copy-paste. But here's the catch. Because this one class has to work for <em>every</em> type (Booking, Event, User…), it can only have methods that make sense for <em>all</em> of them: <code>Save</code>, <code>GetById</code>, <code>GetAll</code>. So the moment you need something specific — <em>"confirmed bookings for the taylor-swift event"</em> — there's no method for it, and there can't be: a generic <code>Repository&lt;T&gt;</code> has no idea what "Confirmed" or "EventId" even mean. You're left with two bad options:</p>
+<pre><code>// BAD MOVE A — load everything, filter in memory (the performance trap)
+var all = repo.GetAll();                        // drags ALL rows out of the database
+var result = all.Where(b =&gt; b.EventId == "taylor-swift" &amp;&amp; b.Status == "Confirmed");
+// 5 million rows into memory to keep 2. Server melts.
+
+// BAD MOVE B — bolt a LINQ expression on (the leak)
+public List&lt;T&gt; Find(Expression&lt;Func&lt;T, bool&gt;&gt; predicate);   // caller now writes the query
+// The "abstraction" abstracts nothing — EF leaks straight back through it.</code></pre>
+
+<h4>Why <code>GetAll()</code> loads everything — <code>IEnumerable</code> vs <code>IQueryable</code></h4>
+<p>Bad Move A said "load everything, filter in memory." But <em>why</em> does it load everything? The answer is hidden in one detail: the <strong>return type</strong>. That single word decides whether the <em>database</em> does the filtering or your <em>app</em> does.</p>
+<ul>
+  <li><code>IEnumerable&lt;T&gt;</code> (and <code>List&lt;T&gt;</code>) means <strong>the data is already fetched</strong>. The query has already run. Any <code>.Where(...)</code> you write after this runs in your app's memory, on rows that are already sitting there.</li>
+  <li><code>IQueryable&lt;T&gt;</code> means <strong>a query that hasn't run yet</strong> — it's lazy. Any <code>.Where(...)</code> you add becomes part of the SQL, so the <em>database</em> does the filtering and only the matching rows come back.</li>
+</ul>
+<p><code>GetAll()</code> returns <code>IEnumerable&lt;T&gt;</code>, so it fetches <strong>every row first</strong>, then filters in memory:</p>
+<pre><code>// GetAll returns IEnumerable — the query runs HERE, pulling ALL rows in:
+var all = repo.GetAll();                              // SELECT * FROM Bookings → 5,000,000 rows into memory
+var result = all.Where(b =&gt; b.Status == "Confirmed"); // filter runs in C#, on rows already loaded
+
+// EF directly — db.Bookings is IQueryable, so the filter joins the SQL:
+var result = await db.Bookings
+    .Where(b =&gt; b.Status == "Confirmed")   // becomes part of the query: WHERE Status = 'Confirmed'
+    .ToListAsync();                         // runs NOW; the database filters; only matching rows return</code></pre>
+<p>Identical-looking code, completely different cost. <code>IEnumerable</code> = <em>fetch everything, then filter</em>. <code>IQueryable</code> = <em>filter first, then fetch only what matches</em>. A repository that hands back <code>IEnumerable</code> throws away EF's lazy querying — the very thing you were paying for.</p>
+
+<h4>The leaky-abstraction rot (why generic repos are hated)</h4>
+<p>Watch what happens to that one simple method as real needs pile on, one at a time:</p>
+<pre><code>// Stage 1 — clean and simple
+Task&lt;List&lt;T&gt;&gt; GetAllAsync();
+
+// Stage 2 — need related data, so bolt on includes (magic strings — typo = runtime crash)
+Task&lt;List&lt;T&gt;&gt; GetAllAsync(params string[] includes);
+
+// Stage 3 — need filtering, so expose a LINQ predicate (caller now writes LINQ)
+Task&lt;List&lt;T&gt;&gt; GetAllAsync(Expression&lt;Func&lt;T, bool&gt;&gt; predicate, params string[] includes);
+
+// Stage 4 — need sorting + paging, so bolt those on too
+Task&lt;List&lt;T&gt;&gt; GetAllAsync(Expression&lt;Func&lt;T, bool&gt;&gt; predicate,
+    Func&lt;IQueryable&lt;T&gt;, IOrderedQueryable&lt;T&gt;&gt; orderBy, int skip, int take, params string[] includes);</code></pre>
+<p>By stage 4, your "simpler" method is just a clumsier copy of the tools EF already gave you. You rebuilt filtering, sorting, and paging by hand — and worse than the originals. The wrapper was supposed to <em>hide</em> the database details, but every one of them crept back in through its parameters. When a wrapper leaks the very thing it was meant to hide, that's called a <strong>leaky abstraction</strong> — and it's the main reason people hate the generic repository.</p>
+
+<h4>It also hides EF Core's best features</h4>
+<p>There's a second cost to wrapping EF in a generic repository: you lose easy access to the powerful things EF can already do. Several of EF's most useful tools only work when you call them directly on the query:</p>
+<ul>
+  <li><code>.Include(...)</code> — pull in related data (an order <em>and</em> its lines) in one trip.</li>
+  <li><code>.AsSplitQuery()</code> — split one huge join into a few smaller queries, which is often much faster.</li>
+  <li><code>.TagWith("...")</code> — stick a label on a query so you can spot it later in the database logs.</li>
+  <li><code>.IgnoreQueryFilters()</code> — turn off automatic filters (for example, to let an admin see deleted rows).</li>
+</ul>
+<p>A plain <code>GetById</code> / <code>GetAll</code> gives you no way to reach any of these. So you either go without them, or you start bolting on more parameters to let them through — which is the same leaky slide from above. Either way you end up worse off than if you'd just used EF directly. This is sometimes called the <strong>"least common denominator" problem</strong>: to cover every type, the wrapper can only offer the few things they all share, so all the powerful, specific features get left out.</p>
+
+<h3>Rung 4 → Specific Repository</h3>
+<p>Give up on "write it once." Hand-write a repository per aggregate, with methods <strong>named for the job</strong> and the LINQ sealed inside:</p>
+<pre><code>public interface IBookingRepository
+{
+    Task&lt;List&lt;Booking&gt;&gt; GetConfirmedForEventAsync(string eventId);   // named intent, no leak
+}
+
+public class BookingRepository(AppDb db) : IBookingRepository
+{
+    public Task&lt;List&lt;Booking&gt;&gt; GetConfirmedForEventAsync(string eventId) =&gt;
+        db.Bookings
+          .Where(b =&gt; b.EventId == eventId &amp;&amp; b.Status == "Confirmed")   // LINQ hidden INSIDE
+          .ToListAsync();
+}</code></pre>
+<p>The caller just says <code>GetConfirmedForEventAsync("taylor-swift")</code>. The database does the filtering, and none of the query details leak out. The cost: you write one method per kind of query you need. That's the trade-off — and it's the sensible choice, so <strong>it's what this codebase actually uses.</strong> The anger in that thread is aimed at the <em>generic</em> repo (rung 3), not this one. Two other approaches also keep the details hidden:</p>
+<ul>
+  <li><strong>Filter object</strong> — one <code>FindAsync(BookingFilter f)</code> method, where <code>BookingFilter</code> is a simple object holding the fields you want to search on (event id, status, and so on). The caller fills in <em>what</em> to look for; the repository works out <em>how</em>. Handy for search screens with lots of optional filters.</li>
+  <li><strong>Composition callback</strong> — you hand the repository a small function that shapes the query. Full flexibility, but the query type still shows through to the caller, so it's a middle-ground rather than a fully clean hide.</li>
+</ul>
+<div class="why">
+  <strong>The simple rule for leaky vs clean:</strong> the caller should only say <em>what</em> it wants (like an event id). The repository decides <em>how</em> to get it (the query, kept inside). The moment the <em>how</em> — a raw query expression — shows up in the method's parameters, you've leaked.
+</div>
+
+<h3>Rung 5 → Rich Domain Model / Aggregate</h3>
+<p>Rung 4's repo saves and fetches fine, but it does nothing to stop a booking being put into a nonsense state, because the object is still a wide-open property bag:</p>
+<pre><code>booking.Status = "Confirmed";   // this booking was EXPIRED. no rule stopped it. corrupted data, saved forever.</code></pre>
+<p>An object that's all public get/set with no rules inside is called an <strong>Anemic Domain Model</strong> — basically a database row pretending to be an object. The rules have nowhere to live. The fix: <em>lock the setters</em> so the only way to change the object is by calling a method that checks the rules first.</p>
+<pre><code>public class Booking
+{
+    public string Status { get; private set; } = "Pending";   // READ from outside, WRITE only inside
+
+    private Booking() { }                                       // can't new-up a bad one
+    public static Booking Create(...) =&gt; new() { ... };         // the only door in — always starts Pending
+
+    public void Confirm()                                       // the only door to change state
+    {
+        if (Status == "Expired")
+            throw new InvalidOperationException("Cannot confirm an expired booking.");
+        Status = "Confirmed";
+    }
+}</code></pre>
+<p>Now <code>booking.Status = "Confirmed"</code> <strong>won't compile</strong> — the set is private. Bad state is unreachable, enforced by the compiler. An object like this — one that holds its own rules and only lets you change it through guarded methods — is a <strong>Rich Domain Model</strong>.</p>
+
+<h4>Aggregate and Aggregate Root — plain version</h4>
+<p>Some business objects <em>own</em> other objects. Take an <code>Order</code> that owns its <code>OrderLine</code>s:</p>
+<pre><code>Order  (total: $150, status: Pending)
+  ├─ OrderLine  (2 × T-shirt, $40)
+  ├─ OrderLine  (1 × Shoes,   $90)
+  └─ OrderLine  (1 × Hat,     $20)</code></pre>
+<p>There's a rule tying them together: the order's <code>total</code> must always equal the sum of its lines. So who is allowed to add a line?</p>
+<pre><code>order.Lines.Add(newLine);   // ❌ BAD — line added, but total NOT updated. Now they disagree → corrupt.
+order.AddLine(newLine);     // ✅ GOOD — the method adds the line AND updates the total, together.</code></pre>
+<p>The <code>Order</code> + its <code>OrderLine</code>s, treated as one protected unit, is an <strong>Aggregate</strong>. The <code>Order</code> — the only object outside code is allowed to touch — is the <strong>Aggregate Root</strong>. You never modify a line directly; you go through the root, and the root keeps everything consistent. Your <code>Booking</code> is the simplest possible aggregate — it owns no child objects, so the root <em>is</em> the whole thing. See <a href="#aggregate-repo">§14</a> for why this "one consistent unit" is exactly what a repository should load and save.</p>
+<div class="good">
+  <strong>The ceasefire line.</strong> Even the person who started the thread — after 200 comments bashing repositories — admitted: <em>"DDD Aggregates are basically the only valid use case for a Repository in 2025."</em> Here's why the aggregate and the repository need each other:
+  <ul>
+    <li>The <strong>aggregate</strong> (rung 5) stops you creating bad data <em>inside your running program</em> — <code>booking.Status = "..."</code> won't even compile.</li>
+    <li>The <strong>repository</strong> (rung 4) is the <em>only</em> code allowed to load and save that aggregate.</li>
+  </ul>
+  Put the two together and there is exactly <em>one</em> path to change data — and that path is forced to go through the rules.
+</div>
+<pre><code>// The ONLY way to change a booking — every step is guarded:
+var booking = await repo.GetByIdAsync(id);   // 1. the repository loads it  (the only door IN)
+booking.Confirm();                            // 2. change it through a method that checks the rules
+await repo.SaveAsync();                        // 3. the repository saves it  (the only door OUT)
+
+// There is no other route in or out:
+booking.Status = "Confirmed";                 // ❌ won't compile — the setter is private
+db.Bookings.Update(somethingHandBuilt);       // ❌ not allowed — nothing else talks to the DB directly</code></pre>
+<p>That single, rule-enforced path is what people mean when they call the repository the aggregate's <strong>guarded door</strong>: to touch the data at all, you must go through the object that refuses to hold bad data.</p>
+
+<h3>Rung 6 → CQRS</h3>
+<p>Every booking is now a guarded aggregate — great for <em>changing</em> data, heavy for just <em>showing</em> it. Loading a full aggregate (private constructors, change-tracking, rules) is overkill to render a dashboard list. So split the two paths:</p>
+<pre><code>// WRITE path — through the aggregate + repository. Rules enforced.
+var booking = await repo.GetByIdAsync(id);
+booking.Confirm();
+await repo.SaveAsync();
+
+// READ path — skip all of it. Thin, direct, read-only.
+var list = await db.Bookings
+    .AsNoTracking()                                    // don't track — we're only displaying
+    .Where(b =&gt; b.EventId == "taylor-swift")
+    .Select(b =&gt; new BookingListItem(b.Id, b.Status))  // straight into a flat DTO, no aggregate
+    .ToListAsync();</code></pre>
+<p><strong>CQRS</strong> stands for Command Query Responsibility Segregation — a big name for a simple idea: use two <em>different paths</em> for changing data versus reading it. Changing data (commands) goes through the aggregate, because the rules matter. Reading data (queries) goes straight to the database, because speed matters and there are no rules to protect when you're only looking. This pays off at scale: a ticketing site might do 1000 reads for every 1 write, and once the two paths are separate you can speed each one up on its own. (More on CQRS on Day 6.)</p>
+
+<h3>Rung 7 → Clean Architecture</h3>
+<p>By now you have several pieces: the aggregate, the repository interface, the EF Core code that implements it, and the read models. Two questions come up: where does each piece live, and what is allowed to depend on what? Clean Architecture answers both with one simple rule:</p>
+<p><strong>Your business rules (the Domain) depend on nothing. Everything else depends on them — never the other way around.</strong></p>
+<p>So the <code>Booking</code> aggregate is plain C# that knows nothing about EF Core, MongoDB, or the database. The database code depends on the domain, not the reverse. That keeps your most important code (the rules) clean and easy to test. Full detail is in <a href="#clean-arch">§8</a>; the interface trick that makes the "depend on nothing" rule possible is in <a href="#di-vs-dip">§13</a>.</p>
+
+<h3>Rung 8 → The Write-Only Repository (reads go elsewhere)</h3>
+<p>Rung 6 (CQRS) said "split reads from writes." Rung 8 is the concrete, everyday shape of that split — and it's what experienced DDD developers actually build. It comes down to <strong>two small interfaces with one job each</strong>:</p>
+<pre><code>// WRITE side — the repository. Its ONLY job: hand you an aggregate to change, and save it.
+public interface IBookingRepository
+{
+    Task&lt;Booking?&gt; GetByIdAsync(Guid id);   // load one aggregate, so you can change it
+    void Add(Booking booking);
+    Task SaveAsync();
+    // ← notice: no GetAll, no Find, no queries. Reading is NOT its job.
+}
+
+// READ side — a tiny separate query interface. Not the repository.
+public interface IQuery&lt;T&gt;
+{
+    IQueryable&lt;T&gt; Query();   // just returns db.Set&lt;T&gt;().AsNoTracking()
+}
+
+// Reading a list goes through the query side — never the repository:
+var events = await query.Query()
+    .Where(b =&gt; b.Status == "Confirmed")
+    .Select(b =&gt; new EventRow(b.Id, b.Name))   // straight into a flat display object
+    .ToListAsync();</code></pre>
+<p><strong>Why split it this way?</strong> The repository stays tiny and focused: it only does the three write operations that are the <em>same for every aggregate</em> — load-by-id, add, save. There's nothing to leak, because there are no queries in it. All the varied, messy querying lives on the read side, where it can't creep into your write model. This is the exact setup <a href="https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/infrastructure-persistence-layer-design">Microsoft's own DDD guide</a> recommends, and it's what one thread commenter meant by <em>"I don't use the repository to read data — I always use a query interface built on top of EF."</em></p>
+<div class="why">
+  <strong>This also settles the "but I like a generic repository for DDD" confusion.</strong> Some people say they use a <em>generic</em> repository and it works great — which sounds like it contradicts rung 3. It doesn't. Their "generic" base only covers those three <em>write</em> operations (and only for aggregate roots) — <code>GetById</code>, <code>Add</code>, <code>Save</code>. Those are genuinely identical for every aggregate, so sharing them leaks nothing. The <em>hated</em> generic repo (rung 3) is a different beast: it tries to be your <strong>query API</strong> too (<code>GetAll</code>, <code>Find(Expression)</code>) — and querying is exactly where all the leaking happens. Same word, opposite outcome: generic writes = fine, generic queries = trouble.
+</div>
+
+<h3>Rung 9 → Reusing Reads Without a Repository (Extension Methods)</h3>
+<p>Rung 8 said: for reading, skip the repository and query the database directly. Great — but what happens when the <em>same</em> complicated query is needed in ten different places? For example: <em>"active gold members who ordered in the last 30 days."</em> Do you copy-paste that everywhere? And if you're not using a repository, where does shared query logic even live?</p>
+<p>The answer: write it once as an <strong>extension method</strong> — a small helper you can tack onto a query. You give the query a friendly name, reuse it anywhere, and it still runs in the database.</p>
+<pre><code>// Write the reusable filter ONCE, with a clear name:
+public static class UserQueries
+{
+    public static IQueryable&lt;User&gt; ActiveGoldMembers(this IQueryable&lt;User&gt; users) =&gt;
+        users.Where(u =&gt; u.IsActive &amp;&amp; u.Tier == Tier.Gold);
+}
+
+// Reuse it anywhere — reads like plain English, and still runs as ONE SQL query:
+var users = await db.Users
+    .ActiveGoldMembers()             // ← the shared filter, reused
+    .Where(u =&gt; u.SignedUpThisYear)  // ← plus anything extra you need this time
+    .ToListAsync();</code></pre>
+<p>Why this is nice:</p>
+<ul>
+  <li><strong>No repository</strong> — the shared logic lives in a small, plain helper, not a wrapper class.</li>
+  <li><strong>Still fast</strong> — the query stays lazy (see the <code>IQueryable</code> note in rung 6), so the whole thing runs as one SQL query in the database. Nothing gets loaded into memory just to be filtered.</li>
+  <li><strong>Stackable</strong> — you can chain these filters together like Lego blocks.</li>
+</ul>
+<p>This trick has a fancy name — the <strong>Specification Pattern</strong> — but it's really just "reusable, named pieces of a query." It's the read-side answer that lets you drop the repository for reads <em>without</em> copy-pasting the same query everywhere.</p>
+<div class="why">
+  <strong>Where this comes from.</strong> The person who started that r/dotnet thread later wrote an article, <em>"Stop Using the Repository Pattern with Entity Framework Core."</em> Despite the dramatic title, his actual advice matches this ladder almost exactly: for <strong>reads</strong>, skip the repository and query EF directly, using extension methods like the one above to avoid repeating yourself; for <strong>writes</strong>, he still uses an aggregate. So "stop using repositories" really means "stop using a <em>generic</em> repository as your query tool" — not "never use one at all." The headline is bigger than the argument. His other three points are all covered above: that a wrapper <strong>hides EF's features</strong> and that <code>GetAll()</code> <strong>loads the whole table</strong> are both in rung 3; that <strong>mocking the database gives false confidence</strong> is in the testing sub-ladder just below.
+</div>
+
+<h3>The testing sub-ladder</h3>
+<p>Running in parallel through the thread is a second argument — <em>how do you test data access?</em> — which is its own four-rung ladder:</p>
+<table>
+  <thead><tr><th>Rung</th><th>Approach</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>a</td><td>Mock the repository / DbSet</td><td>Fastest, but mocks <em>lie</em>: they run LINQ-to-Objects while production runs LINQ-to-SQL. A query that passes the mock can throw a translation error in prod.</td></tr>
+    <tr><td>b</td><td>EF Core In-Memory provider</td><td>Closer, but <strong>Microsoft's own docs say don't</strong> — <code>Include</code> behaves differently, no real query translation.</td></tr>
+    <tr><td>c</td><td>SQLite in-memory</td><td>A better middle rung — a real relational engine, still fast.</td></tr>
+    <tr><td>d</td><td>Testcontainers (real DB in a container)</td><td>The thread's favourite. Spin up real Postgres/SQL Server per run. Catches translation errors mocks miss.</td></tr>
+  </tbody>
+</table>
+<p><strong>Why do mocks "lie"?</strong> A fake database runs plain C#, but a real database runs SQL — and the two don't always agree. Say you write a query that compares text while ignoring upper/lower case. Against the fake it works perfectly (real C# knows how to do that). Against a real SQL database it might <em>crash</em>, because that exact comparison can't be translated into SQL. Your test went green, but production breaks. That's the trap: the fake hands you confidence the real database won't back up.</p>
+<p><strong>The sensible approach:</strong> test the two layers <em>separately</em>. Your business rules → use a fake repository (fast, run on every change). The repository itself → test it against a real database in a container (slower, run less often). Don't mix the two. One neat trick from the thread: if a method only needs some <em>data</em>, pull the logic out into a separate method that takes that data as a parameter — then you can test it by just passing the data in, with no database or fake needed.</p>
+
+<h3>One more nuance — "DbContext is already a repository" isn't always true</h3>
+<p>A common argument is "EF Core's <code>DbContext</code> is already a repository, so don't wrap it." That's only true when your objects look <em>exactly</em> like your table rows. But a rich aggregate often <em>doesn't</em>: the way it's stored (flat columns) can differ from the way it lives in memory (an object with private lists, computed values, and rules). Here's a concrete mismatch:</p>
+<pre><code>// ── How the Order LIVES IN MEMORY (a rich aggregate) ─────────────────
+public class Order
+{
+    private readonly List&lt;OrderLine&gt; _lines = new();          // PRIVATE list — outsiders can't touch it
+    public IReadOnlyList&lt;OrderLine&gt; Lines =&gt; _lines;          // only a read-only view is exposed
+    public decimal Total =&gt; _lines.Sum(l =&gt; l.Price);         // COMPUTED on the fly — not a stored field
+
+    public void AddLine(OrderLine line) =&gt; _lines.Add(line);  // the only way to add a line
+}
+
+// ── How it's STORED (flat rows across two tables) ────────────────────
+//   Orders table:      | Id | CustomerId | ... |          ← no "Total" column
+//   OrderLines table:  | Id | OrderId | Price | ... |      ← the lines live here, separately</code></pre>
+<p>The shapes don't match. A raw <code>DbSet&lt;Order&gt;</code> can't just <em>be</em> your repository, because:</p>
+<ul>
+  <li><code>_lines</code> is <strong>private</strong> — EF has to be told to read and write it through its hidden backing field, not a public property.</li>
+  <li><code>Total</code> is <strong>computed</strong>, not stored — there's no <code>Total</code> column; it's recalculated from the lines.</li>
+  <li>Loading an order means <strong>stitching</strong> its separate <code>OrderLine</code> rows back into the aggregate's private list.</li>
+</ul>
+<pre><code>// The repository is where that translation lives — it rebuilds the whole aggregate:
+public async Task&lt;Order?&gt; GetByIdAsync(Guid id) =&gt;
+    await db.Orders
+        .Include("_lines")        // pull the child rows and pour them back into the private list
+        .FirstOrDefaultAsync(o =&gt; o.Id == id);</code></pre>
+<p>That translating — flat rows in, whole aggregate out — is a job a raw <code>DbSet</code> doesn't do for you. It's one more reason the aggregate + repository pairing earns its place.</p>
+
+<div class="interview">
+  <strong>Interview answer — "Do you use the repository pattern?"</strong><br/>
+  "Not a <em>generic</em> one — <code>IRepository&lt;T&gt;</code> over EF Core is a leaky abstraction that hides <code>AsSplitQuery</code>, forces you to either load everything into memory or expose <code>Expression&lt;Func&lt;&gt;&gt;</code>, and ends up re-implementing LINQ badly. But I use a <em>specific</em> repository when I'm doing DDD — the repo hydrates aggregates and is the only door to my domain entities, so invariants stay enforced. Reads I keep separate with direct EF and <code>AsNoTracking</code> — that's CQRS. And I don't lean on repos for testability the way people used to: I mock the repo for business-logic unit tests but test the data layer itself with Testcontainers against a real database, because EF In-Memory doesn't catch translation errors. The people arguing about this are usually just standing on different rungs — simple CRUD is fine with direct EF; a complex domain earns the aggregate."
+</div>
+
+<div class="why">
+  <strong>The meta-insight:</strong> people argue endlessly about repositories because they are standing on <em>different rungs</em> and think they're on the same one. "Just use EF directly" (rung 2–3) and "the repo protects my aggregate" (rung 5–9) are both correct — about different situations. The Staff-level skill isn't picking a universal side; it's <strong>naming which rung a given situation calls for.</strong> Simple admin CRUD? Rungs 1–3. Complex domain with real invariants? Climb to 5–9.
+</div>
+
+<h3>Conclusion — the whole ladder in one thought</h3>
+<p>There is no single "right" answer to <em>"should I use a repository?"</em> — it depends which rung your situation sits on:</p>
+<ul>
+  <li><strong>Simple CRUD, no real rules?</strong> Stay low. Use EF Core directly (rungs 1–3). A repository would just be ceremony.</li>
+  <li><strong>A real domain with rules to protect?</strong> Climb to the top: a rich <strong>aggregate</strong> (rung 5) behind a <strong>write-only repository</strong> (rung 8), <strong>reads</strong> through a separate query path (rungs 6 and 9), everything organised by <strong>Clean Architecture</strong> (rung 7).</li>
+</ul>
+<p>The people in that thread aren't really disagreeing — they're standing on different rungs. Your job is simply to name the rung the problem in front of you actually needs. That one skill is worth more than memorising any single pattern.</p>
+<div class="interview">
+  <strong>Reference — read it later.</strong> This whole section decodes one r/dotnet thread: <a href="https://www.reddit.com/r/dotnet/comments/1pq2zrx/why_is_the_generic_repository_pattern_still_the/">"Why is the Generic Repository pattern still the default in so many .NET tutorials?"</a> Worth a read once the ladder makes sense — you'll be able to spot which rung each commenter is standing on. The authoritative counterpart is <a href="https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/infrastructure-persistence-layer-design">Microsoft's DDD persistence-layer guide</a>, which states the "one repository per aggregate root" and "reads via CQRS" rules as official guidance.
+</div>
+
+<!-- ══════════════════════════════ 13. DI vs DIP ══════════════════════════════ -->
+<h2 id="di-vs-dip">13. Dependency Injection vs Dependency Inversion</h2>
+
+<p>Two ideas with near-identical names that people constantly conflate. They are <strong>different things at different levels</strong> — one is an architectural <em>principle</em> about which way dependencies point; the other is a <em>technique</em> for handing an object what it needs. You can do either without the other. They just happen to work beautifully together.</p>
+
+<table>
+  <thead><tr><th></th><th>Dependency <strong>Inversion</strong> (DIP)</th><th>Dependency <strong>Injection</strong> (DI)</th></tr></thead>
+  <tbody>
+    <tr><td><strong>What it is</strong></td><td>A design <em>principle</em> (the "D" in SOLID)</td><td>A <em>technique</em> / mechanism</td></tr>
+    <tr><td><strong>Question it answers</strong></td><td>Which direction should dependencies point?</td><td>How does an object get the things it depends on?</td></tr>
+    <tr><td><strong>Level</strong></td><td>Architecture — how layers relate</td><td>Plumbing — how one object is constructed</td></tr>
+    <tr><td><strong>Concerns</strong></td><td>Interfaces, abstractions, layer boundaries</td><td>Constructors, parameters, the DI container</td></tr>
+    <tr><td><strong>Result</strong></td><td>High-level policy doesn't depend on low-level detail</td><td>A class doesn't build its own dependencies</td></tr>
+  </tbody>
+</table>
+
+<h3>Dependency Inversion (the principle)</h3>
+<p>The formal statement: <em>"High-level modules should not depend on low-level modules. Both should depend on abstractions."</em> In plain terms: your important code (business rules) should not reach <em>down</em> to your unimportant code (the database). Instead, the important code <strong>defines the terms</strong> (an interface), and the database bends up to meet them.</p>
+<p>Without inversion, the natural dependency arrow points the wrong way:</p>
+<pre><code>// WITHOUT inversion — Domain reaches DOWN to Infrastructure
+Booking.Domain      ──depends on──▶   Booking.Infrastructure (EF Core)
+// Now EF Core leaks into your business rules. Change the DB → change the domain.</code></pre>
+<p>With inversion, you put the interface in the Domain and let Infrastructure implement it. The arrow flips:</p>
+<pre><code>// WITH inversion — Infrastructure reaches UP to fulfil Domain's interface
+Booking.Domain:            defines  IBookingRepository   (the requirement)
+Booking.Infrastructure:    implements IBookingRepository  (using EF Core)
+Booking.Infrastructure  ──depends on──▶  Booking.Domain
+// Domain depends on NOTHING. EF Core can be swapped and Domain never recompiles differently.</code></pre>
+<p>Notice: the <em>dependency</em> now points inward (Infrastructure → Domain), even though at runtime the <em>behaviour</em> flows outward (Domain's interface is executed by Infrastructure's code). That reversal — dependency pointing opposite to the call flow — is exactly why it's called <em>inversion</em>.</p>
+
+<h3>Dependency Injection (the technique)</h3>
+<p>A completely separate question: once a class needs something, how does it get it? The bad way is to build it yourself:</p>
+<pre><code>// WITHOUT injection — the class constructs its own dependency (tight coupling)
+public class BookingService
+{
+    private readonly BookingRepository _repo = new BookingRepository();  // hard-wired. can't swap. can't fake.
+}</code></pre>
+<p>The injected way is to receive it — usually through the constructor — and let something else decide what to hand over:</p>
+<pre><code>// WITH injection — the dependency is handed in
+public class BookingService(IBookingRepository repo)   // "give me something that keeps the booking promises"
+{
+    private readonly IBookingRepository _repo = repo;
+}
+
+// Registration decides WHICH implementation fills the request:
+builder.Services.AddScoped&lt;IBookingRepository, BookingRepository&gt;();   // real
+// builder.Services.AddScoped&lt;IBookingRepository, FakeBookingRepository&gt;();  // in a test</code></pre>
+<p>The forms of injection: <strong>constructor injection</strong> (stored in a field, the default), <strong>parameter injection</strong> (minimal-API lambdas — ASP.NET resolves the parameter per request, nothing stored on the class), and the anti-pattern cousin, the <strong>service locator</strong> (the class reaches into the container itself with <code>GetRequiredService</code> — works, but hides its dependencies instead of declaring them).</p>
+
+<h3>How they relate</h3>
+<p>DI is the most common <em>mechanism</em> by which DIP is <em>achieved</em>, but they are independent:</p>
+<ul>
+  <li><strong>Inversion without injection:</strong> you can honour DIP by hand — <code>new BookingRepository()</code> passed manually into a domain that only knows <code>IBookingRepository</code>. No container involved. The principle is satisfied; the technique isn't a container.</li>
+  <li><strong>Injection without inversion:</strong> you can inject a <em>concrete</em> class — <code>BookingService(BookingRepository repo)</code>. The container hands it over (that's DI), but you're depending on a concrete low-level type, so DIP is <em>not</em> satisfied.</li>
+</ul>
+<div class="why">
+  <strong>The one-liner:</strong> Dependency <em>Inversion</em> is about <strong>which way the arrows point</strong> (architecture — put the interface in the inner layer). Dependency <em>Injection</em> is about <strong>who hands over the object</strong> (plumbing — don't <code>new</code> your own dependencies). Inversion is the <em>goal</em>; injection is usually <em>how you get there</em>. The interface is the hinge both turn on — inversion needs it to flip the arrow, injection needs it to make the object swappable.
+</div>
+<div class="interview">
+  <strong>Interview answer — "What's the difference between DI and dependency inversion?"</strong><br/>
+  "Dependency Inversion is the SOLID principle — high-level modules shouldn't depend on low-level ones; both depend on an abstraction. In my Booking service that means the repository <em>interface</em> lives in the Domain project and the EF Core <em>implementation</em> lives in Infrastructure, so the arrow points inward and Domain never references EF Core. Dependency Injection is the technique that supplies dependencies at runtime — constructor injection plus the built-in container's <code>AddScoped</code> registration. DI is <em>how</em> I usually satisfy DIP, but they're distinct: I could inject a concrete class and violate inversion, or satisfy inversion by hand without a container. Inversion is the architectural goal; injection is the plumbing."
+</div>
+
+<!-- ══════════════════════════════ 14. AGGREGATE + REPOSITORY ══════════════════════════════ -->
+<h2 id="aggregate-repo">14. Why the Aggregate Is the Ideal Unit for a Repository</h2>
+
+<p>A repository by itself doesn't do much — it's just a layer that talks to the database for you. So why bother having one at all? The answer is the <strong>aggregate</strong>. The aggregate needs a repository, and a repository only truly makes sense when what it stores is an aggregate. They belong together. Here's why.</p>
+<p>(Two words you'll see below: an <strong>invariant</strong> is just <em>a rule that must always be true</em>. <strong>Atomic</strong> means <em>all-or-nothing</em> — either every change happens, or none of them do.)</p>
+
+<h3>One repository per aggregate root — not per table</h3>
+<p>A common beginner assumption: "every database table needs its own repository." <strong>That's wrong.</strong> You make one repository per aggregate <em>root</em> — the main object — not one per table. Back to the Order:</p>
+<pre><code>Order  (the aggregate root — the main object)
+  ├─ OrderLine
+  ├─ OrderLine
+  └─ OrderLine</code></pre>
+<p>You have an <code>OrderRepository</code>. You do <strong>not</strong> have an <code>OrderLineRepository</code> — even though order lines have their own table in the database. Why not? Because a single order line means nothing on its own. Nobody ever loads or saves one lonely line. You always load the <em>whole</em> <code>Order</code> (with its lines), change it, and save the <em>whole</em> <code>Order</code> back. The repository always deals with the complete object, so it only exists for the main object — the root.</p>
+<div class="why">
+  <strong>This is what "a repository stores objects, not rows" means.</strong> A generic <code>Repository&lt;T&gt;</code> (rung 3) treats every table as a separate thing to get and save on its own — which is exactly why it can't protect anything. A real repository is built around one main object, so it loads and saves that object <em>and everything attached to it</em> in one piece.
+</div>
+
+<h3>The whole aggregate must be saved together</h3>
+<p>Remember the rule: the order's total must always match the sum of its lines. That rule only stays true if the order and its lines are <strong>saved together, in one go</strong>. Imagine saving a new line, then the app crashes before it saves the new total — now the total is wrong. Broken data.</p>
+<p>Databases have a tool for exactly this: a <strong>transaction</strong> means "all these changes happen together, or none of them do" (atomic). So the group that must stay correct together — the aggregate — is exactly the group that should be saved in one transaction.</p>
+<pre><code>var order = await orderRepository.GetByIdAsync(id);   // load the whole order + its lines
+order.AddLine(newLine);                                // add line AND update total, together (rule enforced)
+await orderRepository.SaveAsync();                      // save it all at once — one transaction</code></pre>
+<p>That's why <code>SaveAsync()</code> takes no parameter. It doesn't save one specific thing — it saves the whole aggregate you're working on, all at once, or nothing at all.</p>
+
+<h3>The repository is the only way in and out</h3>
+<p>In rung 5 we locked the object down so you couldn't put bad data into it <em>in memory</em> (private setters, guarded methods). But there's still a loophole: what if some code skips the object entirely and writes straight to the database table? The repository closes that loophole — it's the <strong>only</strong> door to storage for the aggregate.</p>
+<pre><code>// ❌ writing to the table directly skips the object — and its rules:
+db.OrderLines.Add(new OrderLine(...));   // total never updated, no rule checked — broken data in the DB
+
+// ✅ the only allowed path: go through the main object, via its repository:
+var order = await orderRepository.GetByIdAsync(id);
+order.AddLine(newLine);                  // rule enforced
+await orderRepository.SaveAsync();</code></pre>
+<p>So the object protects your data <em>in memory</em>, and the repository protects your data <em>in the database</em>. You need both. The object alone can't stop someone writing straight to the table. A repository wrapped around a wide-open object has nothing to protect. Put them together and there's no gap left. <strong>That is why people say "aggregates are the only real reason to use a repository"</strong> — the aggregate is what turns the repository from a pointless wrapper into a real guarantee.</p>
+
+<h3>The three pieces lock together</h3>
+<table>
+  <thead><tr><th>Piece</th><th>What it guarantees</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Aggregate</strong> (private setters + methods)</td><td>You can't put bad data into the object <em>in memory</em> — the compiler and its methods won't let you.</td></tr>
+    <tr><td><strong>Repository</strong> (one per root, the only door)</td><td>The object can only be loaded and saved <em>as a whole</em>, and only through this one path — no writing to the tables behind its back.</td></tr>
+    <tr><td><strong>Transaction</strong> (one aggregate = one save)</td><td>Everything in the aggregate is saved together, all-or-nothing.</td></tr>
+  </tbody>
+</table>
+<p>Take away any one and a gap opens: without the aggregate, code sets fields directly; without the repository-as-only-door, code writes to the tables behind its back; without the one-save-per-aggregate rule, a half-saved order breaks its own total. All three together mean bad data simply <em>can't happen</em>.</p>
+
+<div class="good">
+  <strong>Keep aggregates small.</strong> Because the whole aggregate is loaded and saved together, a giant one is slow and gets in other users' way. If an <code>Order</code> held 10,000 line items, every tiny change would load and lock all 10,000 at once. So only put things in the same aggregate if they <em>truly</em> must stay correct together. Everything else should be its own separate aggregate, linked by ID rather than owned directly.
+</div>
+
+<div class="interview">
+  <strong>Interview answer — "What's the relationship between aggregates and repositories?"</strong><br/>
+  "I make one repository per aggregate <em>root</em>, not one per table. So there's an <code>OrderRepository</code>, but no <code>OrderLineRepository</code> — an order line doesn't exist on its own, it's only ever part of an order. The repository loads and saves the whole order, with its lines, as one unit. That matters because the aggregate is the <strong>consistency boundary</strong> — which just means the group of things that have to stay correct together. The order's total has to match its lines, and that only stays true if they're saved together. So the aggregate is also the <strong>transaction boundary</strong>: one aggregate, one all-or-nothing save. And the repository is the only door to storage for that aggregate, so no stray code can go around the order and change the line rows directly. That's the real reason to use a repository, and it's a DDD idea: without an aggregate, a repository is just a pointless wrapper over EF; with one, it's what makes bad data impossible and every change all-or-nothing. I also keep aggregates small, because one aggregate is one transaction — a giant aggregate means the database locks a giant amount of data on every change."
+</div>
+
+<div class="why">
+  <strong>Footnote — how does EF Core actually load a locked-down object?</strong> Fair question: if the setters are private and the constructor is private, how does EF fill the object with data from the database? EF cheats (legally) — it uses <em>reflection</em>, a .NET feature that can bypass "private" and write to fields directly. So EF can still create and fill your aggregate, while <em>your</em> code is stuck going through the factory and guarded methods. And EF saves everything in one transaction automatically: change the aggregate through its methods, call <code>SaveChangesAsync()</code> once, and all the changes commit together. So the "one aggregate = one save" rule above happens for free. (This is just the plumbing — the reason it matters is everything above.)
 </div>
 
 <div style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: #9ca3af; font-size: 12px;">

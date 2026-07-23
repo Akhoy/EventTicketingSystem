@@ -10,6 +10,8 @@
     <!-- EF Core packages removed — they now live in Booking.Infrastructure where they belong.
          Booking.API only knows about the interfaces defined in Booking.Domain. -->
     <PackageReference Include="MediatR" Version="12.5.0" />
+    <!-- Lets the API understand login tokens (JWTs) sent by callers. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
     <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />

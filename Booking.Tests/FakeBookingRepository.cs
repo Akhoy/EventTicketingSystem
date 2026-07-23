@@ -22,8 +22,15 @@ public class FakeBookingRepository : IBookingRepository
     // Lets a test seed the fake with bookings before exercising the worker logic.
     public void Seed(Domain.Booking booking) => _bookings.Add(booking);
 
+    // Lets a test simulate a database failure (e.g. connection dropped mid-write) to exercise
+    // the rollback path in CreateBookingHandler, without needing a real SQL Server to fail.
+    public bool ThrowOnAdd { get; set; }
+
     public Task AddAsync(Domain.Booking booking)
     {
+        if (ThrowOnAdd)
+            throw new InvalidOperationException("Simulated database failure.");
+
         _bookings.Add(booking);
         return Task.CompletedTask;
     }

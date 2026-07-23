@@ -1,7 +1,9 @@
 <Solution>
   <Project Path="ApiGateway/ApiGateway.csproj" />
   <Project Path="Booking.API/Booking.API.csproj" />
+  <Project Path="Booking.Application/Booking.Application.csproj" />
   <Project Path="Booking.Domain/Booking.Domain.csproj" />
   <Project Path="Booking.Infrastructure/Booking.Infrastructure.csproj" />
+  <Project Path="Booking.Tests/Booking.Tests.csproj" />
   <Project Path="Catalog.API/Catalog.API.csproj" />
 </Solution>

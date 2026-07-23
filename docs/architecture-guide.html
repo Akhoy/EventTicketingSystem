@@ -714,6 +714,179 @@ public interface ICatalogRepository {
 
 <div class="pattern-card">
   <div class="pattern-title">
+    <h3 style="margin:0">Value Objects — EventId, SeatId</h3>
+    <span class="tag tag-pattern">Pattern</span>
+    <span class="tag tag-principle">DDD</span>
+  </div>
+  <p>
+    <code>Booking.EventId</code> and <code>Booking.SeatId</code> were plain <code>string</code> fields. They are now
+    <code>EventId</code> and <code>SeatId</code> — <code>readonly record struct</code> Value Objects in
+    <code>Booking.Domain</code>. A Value Object is defined by its <em>value</em>, not an identity: two
+    <code>SeatId</code>s wrapping the same string are simply equal, interchangeable, with no notion of
+    "which one is which" — unlike <code>Booking</code> itself, which is an entity distinguished by its <code>Id</code>
+    even if every other field matches.
+  </p>
+  <pre><code>public readonly record struct SeatId
+{
+    public string Value { get; }
+
+    public SeatId(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("SeatId cannot be null or empty.", nameof(value));
+        Value = value;
+    }
+
+    public override string ToString() => Value;
+}</code></pre>
+  <p>
+    <code>record struct</code> (not just <code>record</code>) was the deliberate choice: <code>record</code> alone is
+    shorthand for <code>record class</code> — still heap-allocated, still a reference type that merely
+    <em>compares</em> by value. <code>record struct</code> backs the same generated equality with a value type
+    instead, so a copy simply <em>is</em> the value — there's no leftover "secretly an object" identity sitting on
+    the heap, which is what a Value Object is conceptually supposed to be. It also avoids a heap allocation on
+    every booking created, seat compared, or row hydrated from the database.
+  </p>
+  <div class="why">
+    <strong>The pain it solves:</strong> As raw strings, <code>Booking.Create(seatId, eventId, userId)</code>
+    compiled even with the two arguments swapped — the compiler only sees "string, string, string." As distinct
+    types, that swap is now a compile error. Validation ("can't be empty") also used to be a rule someone had to
+    remember to re-check at every call site; now it's enforced once, in the constructor — an invalid
+    <code>SeatId</code> or <code>EventId</code> cannot exist.
+  </div>
+  <div class="warn">
+    <strong>EF Core needed telling:</strong> EF Core's conventions have no idea what a <code>record struct</code>
+    like <code>EventId</code> maps to — model building throws <code>"...which is not a supported primitive type"</code>
+    until you configure a <code>ValueConverter</code> via <code>.HasConversion(...)</code> in
+    <code>BookingDbContext.OnModelCreating</code>, telling EF how to unwrap it to a plain string column and back.
+    See the C# reference's EF Core section for the full mechanism, including why a design-time factory was
+    needed to run <code>dotnet ef migrations add</code> at all once Booking.Infrastructure stopped depending on
+    Booking.API's DI container.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
+    <h3 style="margin:0">Domain Events — BookingConfirmed</h3>
+    <span class="tag tag-pattern">Pattern</span>
+    <span class="tag tag-principle">DDD</span>
+  </div>
+
+  <div class="good">
+    <strong>One word defined up front: "reaction."</strong> Everywhere below, "reaction" just means <em>something that happens because a booking got confirmed</em> — publishing a message, sending an email, logging a line. Anything that needs to happen <em>as a result of</em> the confirmation, not the confirmation itself.
+  </div>
+
+  <h4 style="margin:18px 0 8px">1. What was wrong before</h4>
+  <p><code>Booking.Confirm()</code> used to do one thing only:</p>
+  <pre><code>public void Confirm()
+{
+    // ...checks...
+    Status = "Confirmed";   // ← that's it. Nothing else is told.
+}</code></pre>
+  <p>Nothing else finds out right away. The only reaction that exists today — publishing to RabbitMQ — happens because <code>OutboxRelayWorker</code> keeps <strong>asking</strong> the database, over and over, on a timer: "any booking that's <code>Confirmed</code> but not yet published?" It tells "already handled" apart from "not handled yet" using one column, <code>PublishedAt</code>.</p>
+  <p>That's fine for one reaction. It breaks down if a second reaction is ever needed — say, "send a confirmation email" — because that would need its <em>own</em> new column (<code>EmailSentAt</code>) and its own timer-poller, just to track "have I done this one yet?" Every new reaction means a new column and a new poller.</p>
+
+  <h4 style="margin:18px 0 8px">2. What a Domain Event is</h4>
+  <p>A small record of something that <strong>already happened</strong> — named in the past tense, <code>BookingConfirmed</code>, not <code>ConfirmBooking</code>. The idea: instead of other code <em>asking</em> the database "did this happen yet?", the booking itself <strong>says so</strong>, the moment it happens.</p>
+
+  <h4 style="margin:18px 0 8px">3. Ideas tried and rejected, and why each one broke</h4>
+  <table>
+    <thead><tr><th>Idea</th><th>Why it broke</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>A normal C# <code>event</code> on the booking object (like a button's <code>Click</code>)</td>
+        <td>Needs someone to attach a listener to <em>that specific object</em>, in advance. But each <code>Booking</code> object only exists for a few seconds — see §4. There's no object around early enough to attach a listener to.</td>
+      </tr>
+      <tr>
+        <td>A <code>static</code> event on the whole <code>Booking</code> type, fired straight from <code>Confirm()</code></td>
+        <td>Fixes the "which object" problem — you can attach a listener once, to the type, at startup. But it fires <em>immediately</em>, before the database save happens. If the save then fails, you've already announced something that never actually got saved.</td>
+      </tr>
+      <tr>
+        <td>Same static event, but fired from <code>Program.cs</code> after the save succeeds</td>
+        <td>Fixes the timing. But now every place that calls <code>Confirm()</code> has to remember to also add this extra line afterward. Forget it once in some new endpoint later, and nothing breaks loudly — it just silently never announces.</td>
+      </tr>
+      <tr>
+        <td>Same static event, fired from inside the save method itself</td>
+        <td>Fixes both problems above. But to fire it correctly, the save method still has to know <em>which</em> booking, <em>which</em> event — and a static event has no way to carry that information per booking. You'd need a list (next row) to answer that anyway — so the static event becomes a pointless extra layer once you have the list.</td>
+      </tr>
+      <tr>
+        <td>Skip events, just re-check <code>Status == "Confirmed"</code> directly</td>
+        <td>This is what Outbox already does. Same limit as §1: can't tell "just happened" from "already handled" without a dedicated marker column per reaction.</td>
+      </tr>
+      <tr>
+        <td><strong>A list on the booking itself, read after the save succeeds</strong></td>
+        <td><em>This is the one actually used — see §5.</em></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin:18px 0 8px">4. Why a booking object only exists for a few seconds</h4>
+  <p>The one <em>permanent</em> thing is a row in the <code>Bookings</code> SQL table. It just sits there, on disk.</p>
+  <p>The C# <code>Booking</code> object is not that row — it's a fresh copy of it, built new, every single time someone asks for it. Like asking a bank teller for a printed receipt: each time, you get a brand-new piece of paper. Writing a note on today's receipt doesn't carry over to tomorrow's — tomorrow you get a new piece of paper, built fresh from whatever the ledger says right now.</p>
+  <p>Why does the object go away? Each web request gets its own short-lived database connection (<code>BookingDbContext</code>, one per request). Once the request ends, nothing is holding onto that object anymore, and it just gets cleaned up. The booking itself is fine — still safely a row in SQL — only the temporary paper copy is gone.</p>
+  <p>So: no object exists early enough, or long enough, for anything to pre-attach a listener to it.</p>
+
+  <h4 style="margin:18px 0 8px">5. The mechanism actually used</h4>
+  <p><code>Booking</code> gets its own small list, plus a read-only way to peek at it:</p>
+  <pre><code>// Booking.Domain/Booking.cs
+private readonly List&lt;object&gt; _domainEvents = new();
+public IReadOnlyCollection&lt;object&gt; DomainEvents =&gt; _domainEvents.AsReadOnly();
+public void ClearDomainEvents() =&gt; _domainEvents.Clear();
+
+public void Confirm()
+{
+    // ...checks...
+    Status = "Confirmed";
+    _domainEvents.Add(new BookingConfirmed(Id));   // just a note — nothing sent yet
+}</code></pre>
+  <p><code>BookingConfirmed</code> is a tiny record carrying just enough to act on later:</p>
+  <pre><code>// Booking.Domain/BookingConfirmed.cs
+public record BookingConfirmed(Guid BookingId);</code></pre>
+  <p>Right after <code>Confirm()</code> runs, nothing has happened yet — no message sent, no log written. The note is just sitting in memory on that one booking.</p>
+
+  <h4 style="margin:18px 0 8px">6. Two different words: "raise" vs "dispatch"</h4>
+  <p><strong>Raise</strong> = write the note. Happens inside <code>Confirm()</code>, the instant the rule fires — because that's the only place that knows it just happened. <strong>Dispatch</strong> = read the note and act on it. Happens later, and only after the database save has actually succeeded.</p>
+
+  <h4 style="margin:18px 0 8px">7. Where dispatch happens, and why there</h4>
+  <pre><code>// Booking.Infrastructure/BookingRepository.cs
+public async Task SaveAsync()
+{
+    await _context.SaveChangesAsync();   // if this fails, nothing below runs
+
+    var bookingsWithEvents = _context.ChangeTracker.Entries&lt;Booking&gt;()
+        .Select(e =&gt; e.Entity)
+        .Where(b =&gt; b.DomainEvents.Count &gt; 0);
+
+    foreach (var booking in bookingsWithEvents)
+    {
+        foreach (var domainEvent in booking.DomainEvents)
+            _logger.LogInformation("Domain event dispatched: {DomainEvent}", domainEvent);
+
+        booking.ClearDomainEvents();
+    }
+}</code></pre>
+  <p><code>SaveAsync()</code> is the one method that always saves to the database. Every caller — today's endpoint, any future one — already has to call it. Gluing the dispatch step onto it means every caller gets it automatically, with nothing extra to remember.</p>
+  <p>One detail: this reads <code>_context.ChangeTracker.Entries&lt;Booking&gt;()</code>, not <code>_context.Bookings</code>. <code>_context.Bookings</code> means "the whole table" — reading it would ask the database for every booking ever made. <code>ChangeTracker.Entries&lt;T&gt;()</code> means "just the objects already in memory for this one request" — no extra database trip, and only the bookings actually relevant right now.</p>
+
+  <h4 style="margin:18px 0 8px">8. Why clear the note afterward</h4>
+  <p>Not because the object is being thrown away — that happens anyway (§4), and isn't the reason. It's because the same request can sometimes call <code>SaveAsync()</code> more than once, and the same booking object could still be around for the second call. Without clearing, that second call would find the same note still there and act on it again, for something already handled once.</p>
+
+  <div class="good">
+    <strong>Checked for real, not just compiled:</strong> running the app and hitting the booking endpoints produced this exact order in the logs —
+    <pre><code>UPDATE [Bookings] SET [Status] = @p0                         ← save commits
+Domain event dispatched: BookingConfirmed { BookingId = ... } ← dispatch, right after
+...
+Relayed booking to ticket_events                              ← Outbox's own separate cycle</code></pre>
+    confirming the dispatch really does happen after the save, and that this sits alongside Outbox without conflict — Outbox still does the real RabbitMQ publish; this is just a separate "this happened" signal running next to it.
+  </div>
+
+  <div class="warn">
+    <strong>Being honest about scope:</strong> since Outbox already handles the one reaction that exists, what <code>BookingConfirmed</code> adds today is small — right now it only logs a line. The point is learning the pattern, so that adding a real second reaction later means writing one new handler that reads the list, instead of adding a new database column and a new poller every time.
+  </div>
+</div>
+
+<div class="pattern-card">
+  <div class="pattern-title">
     <h3 style="margin:0">Fanout Exchange (Publish/Subscribe)</h3>
     <span class="tag tag-pattern">Pattern</span>
   </div>

@@ -1,6 +1,8 @@
 using Booking.API;
+using Booking.Application.Commands;
 using Booking.Domain;
 using Booking.Infrastructure;
+using MediatR;
 using StackExchange.Redis;
 using Serilog;
 
@@ -25,84 +27,61 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
 builder.Services.AddBookingInfrastructure(
     builder.Configuration.GetConnectionString("SqlServer")!);
 
+// Scans the Booking.Application assembly for every class implementing IRequestHandler<T,TResult>
+// (CreateBookingHandler, ConfirmBookingHandler, ...) and registers each one in DI automatically.
+// After this, IMediator.Send(command) finds the matching handler without any manual wiring here.
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateBookingCommand).Assembly));
+
 builder.Services.AddHostedService<OutboxRelayWorker>();
 builder.Services.AddHostedService<BookingExpiryWorker>();
 
 var app = builder.Build();
 
+// Endpoints are now thin: build a command describing the intent, hand it to IMediator, and
+// translate whichever typed result comes back into the matching HTTP response. All the actual
+// logic (Redis locking, counter math, persistence, rollback) lives in CreateBookingHandler,
+// inside Booking.Application — the endpoint itself no longer knows Redis or EF Core exist.
 app.MapPost("/book/{eventId}/{seatId}", async (
     string eventId,
     string seatId,
-    IConnectionMultiplexer redis,
-    IBookingRepository repository,
-    ILogger<Program> logger) =>
+    IMediator mediator) =>
 {
-    var cache = redis.GetDatabase();
+    // A real userId will come from the caller's JWT once auth is added — for now this keeps
+    // the same "no login yet" placeholder behaviour the endpoint always had.
     var userId = Guid.NewGuid().ToString();
 
-    var lockKey = $"seat:lock:{eventId}:{seatId}";
-    var seatsKey = $"event:{eventId}:seats";
+    var result = await mediator.Send(new CreateBookingCommand(eventId, seatId, userId));
 
-    bool locked = await cache.StringSetAsync(lockKey, userId, TimeSpan.FromMinutes(5), When.NotExists);
-    if (!locked)
+    return result switch
     {
-        logger.LogWarning("Seat {SeatId} for event {EventId} is already reserved", seatId, eventId);
-        return Results.Conflict(new { message = $"Seat {seatId} is currently reserved by someone else." });
-    }
-
-    long remaining = await cache.StringDecrementAsync(seatsKey);
-    if (remaining < 0)
-    {
-        await cache.StringIncrementAsync(seatsKey);
-        await cache.KeyDeleteAsync(lockKey);
-        logger.LogWarning("Event {EventId} is sold out", eventId);
-        return Results.Conflict(new { message = $"Event {eventId} is sold out." });
-    }
-
-    var booking = Booking.Domain.Booking.Create(eventId, seatId, userId);
-
-    try
-    {
-        // AddAsync persists the booking — if SQL fails here, we roll back both Redis guards
-        // so the seat counter and lock are restored and the seat isn't permanently lost.
-        await repository.AddAsync(booking);
-    }
-    catch (Exception ex)
-    {
-        await cache.StringIncrementAsync(seatsKey);
-        await cache.KeyDeleteAsync(lockKey);
-        logger.LogError(ex, "Failed to persist booking — rolled back Redis counter and seat lock. Event: {EventId}, Seat: {SeatId}", eventId, seatId);
-        return Results.Problem("Booking could not be saved. Please try again.");
-    }
-
-    logger.LogInformation("Booking created (Pending) — Event: {EventId}, Seat: {SeatId}, BookingId: {BookingId}", eventId, seatId, booking.Id);
-    return Results.Ok(new { bookingId = booking.Id, userId, message = $"Seat {seatId} reserved. Proceed to payment." });
+        CreateBookingSucceeded s => Results.Ok(new { bookingId = s.BookingId, userId = s.UserId, message = s.Message }),
+        CreateBookingSeatTaken s => Results.Conflict(new { message = s.Message }),
+        CreateBookingSoldOut s => Results.Conflict(new { message = s.Message }),
+        CreateBookingPersistFailed s => Results.Problem(s.Message),
+        _ => Results.Problem("Unexpected result.")
+    };
 });
 
 app.MapPost("/payments/{bookingId}/confirm", async (
     Guid bookingId,
-    IBookingRepository repository,
-    ILogger<Program> logger) =>
+    IMediator mediator) =>
 {
-    var booking = await repository.GetByIdAsync(bookingId);
-    if (booking is null)
-        return Results.NotFound(new { message = "Booking not found." });
+    // Same placeholder as above until JWT auth is wired in — at that point this becomes the
+    // authenticated caller's "sub" claim instead of a query-string/header value the caller
+    // could just as easily fake, which is what makes the IDOR check in ConfirmBookingHandler
+    // actually mean something.
+    var requestingUserId = Guid.NewGuid().ToString();
 
-    try
-    {
-        // Confirm() enforces the business rule — throws if booking is Expired.
-        // SaveAsync persists the state change. SaveChangesAsync wraps in an implicit transaction,
-        // so a failure here leaves the booking unchanged in the database.
-        booking.Confirm();
-        await repository.SaveAsync();
-    }
-    catch (InvalidOperationException ex)
-    {
-        return Results.Conflict(new { message = ex.Message });
-    }
+    var result = await mediator.Send(new ConfirmBookingCommand(bookingId, requestingUserId));
 
-    logger.LogInformation("Payment confirmed — Seat: {SeatId}, BookingId: {BookingId}", booking.SeatId, bookingId);
-    return Results.Ok(new { message = "Payment confirmed. Your booking is being processed." });
+    return result switch
+    {
+        ConfirmBookingSucceeded s => Results.Ok(new { message = s.Message }),
+        ConfirmBookingNotFound s => Results.NotFound(new { message = s.Message }),
+        ConfirmBookingForbidden s => Results.Json(new { message = s.Message }, statusCode: StatusCodes.Status403Forbidden),
+        ConfirmBookingConflict s => Results.Conflict(new { message = s.Message }),
+        _ => Results.Problem("Unexpected result.")
+    };
 });
 
 app.Run();

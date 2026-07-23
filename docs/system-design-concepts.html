@@ -415,6 +415,54 @@ booking.Status = null;          // crashes later</code></pre>
     <li><strong>Keep aggregates small</strong> — one aggregate = one transaction, so a huge aggregate makes the database lock a huge amount of data on every change. If an aggregate grows to thousands of rows, the boundary is usually drawn too wide: split the children into their own aggregates and link them by ID.</li>
   </ul>
   <p><strong>Where the terms come from:</strong> Eric Evans, <em>Domain-Driven Design</em> (2003); sharpened by Vaughn Vernon's <em>Effective Aggregate Design</em>. Your <code>Booking</code> is the simplest possible aggregate — it owns no children, so the whole aggregate is just the one object.</p>
+  <div class="why">
+    <strong>One rule, viewed four ways.</strong> Everything about the Order/Lines aggregate traces back to a single rule: <em>"the total must equal the sum of the lines."</em> If you save the order and its lines separately, that rule can break. So:
+    <ul>
+      <li><strong>Consistency boundary</strong> — Order + Lines are the things that must stay correct together, because of that one rule.</li>
+      <li><strong>Transaction boundary</strong> — because they must stay correct together, they're saved together, all-or-nothing.</li>
+      <li><strong>No <code>OrderLineRepository</code></strong> — you never work with a line on its own; it only ever exists as part of the order.</li>
+      <li><strong>Private list</strong> — forces every change through a method that can keep the rule true (e.g. <code>AddLine()</code> updates <code>Total</code> in the same step).</li>
+    </ul>
+    Four things that sound like separate rules to memorise — but they're really one idea, seen from four angles.
+  </div>
+
+  <h4 style="margin-top:16px;">Why bother — isn't this just DDD ceremony?</h4>
+  <p>Fair question. The honest answer: an aggregate is a fix for a specific bug pattern, not a box to tick because "DDD says so." Without one, this compiles and ships:</p>
+  <pre><code>order.Total = 500;
+order.Lines.Add(new OrderLine { Price = 50 });
+// Total still says 500. Nothing enforced it. Silent data corruption — the kind
+// that doesn't crash, just quietly gives a customer a wrong invoice.</code></pre>
+  <p>Nothing stops this because the rule "Total = sum of Lines" doesn't live anywhere — every developer has to remember it, everywhere, forever. An aggregate makes it structurally impossible to forget, by only allowing the change through one method that keeps both in sync:</p>
+  <pre><code>public void AddLine(OrderLine line)
+{
+    _lines.Add(line);
+    Total += line.Price;   // can't be missed — it's the only place this is allowed to happen
+}</code></pre>
+  <p><strong>So it's a real trade-off, not a default.</strong> Use an aggregate when:</p>
+  <ul>
+    <li>There's a rule that spans more than one field or object (Total ↔ Lines; can't confirm an expired booking) — and it must never be violated.</li>
+    <li>Multiple developers or services will touch this data over time, so you can't rely on everyone remembering the rule.</li>
+    <li>A violation is expensive — corrupted financial data, double-booked seats — not just cosmetic.</li>
+  </ul>
+  <p><strong>Skip it when</strong> you're doing plain CRUD with no cross-field rule — a <code>Tag</code> with just a <code>Name</code>, say. Wrapping that in an aggregate is pure ceremony for zero benefit; a plain property bag over direct EF Core (rungs 1–3 of <a href="#ladder">§12</a>) is the right call.</p>
+
+  <h4 style="margin-top:16px;">What if the aggregate is genuinely huge?</h4>
+  <p>Say an <code>Order</code> ends up with 200,000 lines. "Keep aggregates small" doesn't mean hoping your data stays small — it's a signal to check whether the boundary is drawn correctly. Ask: <em>do all 200,000 lines really need to change together, in the same instant?</em> Almost always, no — adding line #200,001 doesn't require locking or loading the other 200,000.</p>
+  <p><strong>The usual fix:</strong> make the children their own small aggregates, referenced by ID instead of held in a list:</p>
+  <pre><code>public class OrderLine   // now its own aggregate — not a child inside Order
+{
+    public Guid OrderId { get; private set; }   // reference by ID, not by holding the object
+    public decimal Price { get; private set; }
+}</code></pre>
+  <p>Adding a line becomes a tiny transaction — one new row — never loading the other 200k. The rule "Total = sum of Lines" then has two honest options instead of loading everything:</p>
+  <ul>
+    <li><strong>Targeted update</strong> — bump the total in the same statement that inserts the line, touching 2 rows instead of 200,000:
+      <pre><code>INSERT INTO OrderLines (OrderId, Price) VALUES (@id, @price);
+UPDATE Orders SET Total = Total + @price WHERE Id = @id;</code></pre>
+    </li>
+    <li><strong>Eventual consistency</strong> — the total updates a moment later via a background handler; the UI may briefly show "calculating…". Normal for huge datasets (see <a href="#cap">§2</a> on BASE).</li>
+  </ul>
+  <p>Real systems do exactly this: a bank account with 10 million transactions doesn't load all 10M to post one — the balance is a stored number, updated in a targeted write, and each transaction is its own independent record. <strong>The takeaway:</strong> a genuinely huge, must-be-instantly-atomic aggregate is extremely rare. A huge row count almost always means the boundary was drawn too wide — split the children into their own aggregates and let the roll-up value catch up.</p>
 </div>
 
 <div class="concept-card">

@@ -10,4 +10,19 @@ public class BookingDbContext : DbContext
     public BookingDbContext(DbContextOptions<BookingDbContext> options) : base(options) { }
 
     public DbSet<Booking.Domain.Booking> Bookings => Set<Booking.Domain.Booking>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Domain.Booking>()
+            .Property(b => b.EventId)
+            .HasConversion(
+                eventId => eventId.Value,
+                value => new EventId(value));
+
+        modelBuilder.Entity<Domain.Booking>()
+            .Property(b => b.SeatId)
+            .HasConversion(
+                seatId => seatId.Value,
+                value => new SeatId(value));
+    }
 }

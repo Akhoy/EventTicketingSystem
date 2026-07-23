@@ -1,3 +1,4 @@
+using Booking.Application;
 using Booking.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +32,11 @@ public static class InfrastructureExtensions
         // a Scoped dependency in its constructor — DI throws at startup. Workers get around this
         // by using IServiceScopeFactory to create a new scope manually each cycle.
         services.AddScoped<IBookingRepository, BookingRepository>();
+
+        // Scoped to match the other Redis-touching services here — a new IDatabase handle
+        // per scope is cheap, and Scoped keeps its lifetime consistent with the repository
+        // it's often used alongside inside the same request.
+        services.AddScoped<ISeatReservationService, RedisSeatReservationService>();
 
         return services;
     }

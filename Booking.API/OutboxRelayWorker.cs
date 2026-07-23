@@ -49,7 +49,7 @@ public class OutboxRelayWorker : BackgroundService
                     foreach (var booking in unpublished)
                     {
                         // Serialize the typed DTO (not an anonymous object) so the wire contract is explicit.
-                        var payload = JsonSerializer.Serialize(new BookingEvent(booking.EventId, booking.SeatId, booking.UserId));
+                        var payload = JsonSerializer.Serialize(new BookingEvent(booking.EventId.Value, booking.SeatId.Value, booking.UserId));
 
                         // Persistent = true ensures the message survives a RabbitMQ broker restart.
                         var props = new BasicProperties { Persistent = true };

@@ -417,21 +417,61 @@ tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 40%, tra
   <p><code>BookingRepository</code> in Infrastructure implements this. Program.cs and workers only reference <code>IBookingRepository</code> — they never know it's EF Core underneath.</p>
 
   <h3>record</h3>
-  <p>A reference type optimised for immutable data. Equality is value-based (two records with the same properties are equal). Automatically generates <code>ToString()</code>, <code>Equals()</code>, and a copy constructor.</p>
+  <p>A reference type optimised for immutable data. Equality is value-based (two records with the same properties are equal). Automatically generates <code>ToString()</code>, <code>Equals()</code>, and a copy constructor. Plain <code>record</code> is shorthand for <code>record class</code> — it is still heap-allocated, still a reference type, it just <em>compares</em> by value instead of by reference.</p>
   <div class="code-block">
     <div class="code-label"><span><span class="code-dot"></span>Booking.API/BookingEvent.cs</span></div>
     <pre><span class="cm">// Positional record — constructor + properties generated automatically</span>
 <span class="kw">public record</span> <span class="ty">BookingEvent</span>(<span class="ty">string</span> EventId, <span class="ty">string</span> SeatId, <span class="ty">string</span> UserId);</pre>
   </div>
 
+  <h3>record struct — Value Objects</h3>
+  <div class="callout warn">
+    <div class="callout-icon">🧭</div>
+    <div class="callout-body">
+      <strong><code>record</code> is a compiler feature, not a type category</strong>
+      <code>record</code> and <code>struct</code>/<code>class</code> are two <em>independent</em> axes, not a spectrum. <code>class</code> vs. <code>struct</code> decides <em>where the type lives</em> — heap (reference type) or stack/inline (value type). <code>record</code> is a separate compiler feature layered on top, that auto-generates value-equality, <code>ToString()</code>, and <code>Deconstruct</code> — it can attach to either one. Plain <code>record</code> secretly means <code>record class</code> (heap); <code>record struct</code> is the exact same generated code, bolted onto a <code>struct</code> (stack) instead.
+    </div>
+  </div>
+  <p>Writing <code>record struct</code> attaches the generated-equality feature to a <code>struct</code> instead of a <code>class</code>, so a copy is just a value with no leftover object identity — exactly what a <strong>Value Object</strong> is meant to be: a type defined by its value, not an identity. Two instances holding the same value are simply interchangeable.</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Domain/SeatId.cs</span></div>
+    <pre><span class="cm">// Value Object — validated at construction, so an invalid SeatId cannot exist.</span>
+<span class="kw">public readonly record struct</span> <span class="ty">SeatId</span>
+{
+    <span class="kw">public string</span> Value { <span class="kw">get</span>; }
+
+    <span class="kw">public</span> <span class="ty">SeatId</span>(<span class="ty">string</span> value)
+    {
+        <span class="kw">if</span> (<span class="ty">string</span>.<span class="me">IsNullOrWhiteSpace</span>(value))
+            <span class="kw">throw new</span> <span class="ty">ArgumentException</span>(<span class="st">"SeatId cannot be null or empty."</span>, <span class="kw">nameof</span>(value));
+        Value = value;
+    }
+
+    <span class="kw">public override string</span> <span class="me">ToString</span>() => Value;
+}</pre>
+  </div>
+  <p>Three things this buys over a raw <code>string SeatId</code>:</p>
+  <ul>
+    <li><strong>Validation at construction, not by convention</strong> — the constructor throws on empty/whitespace input. There is no code path that produces an invalid <code>SeatId</code>; if one exists, it's guaranteed valid.</li>
+    <li><strong>Type safety between different "kinds" of string</strong> — with raw strings, <code>Booking.Create(seatId, eventId, userId)</code> compiles even with the arguments swapped, because the compiler only sees <code>string, string, string</code>. With distinct types, swapping <code>SeatId</code> and <code>EventId</code> is a compile error.</li>
+    <li><strong>Value equality, no manual code</strong> — <code>new SeatId("A12") == new SeatId("A12")</code> is <code>true</code>, generated for free by <code>record</code>, same as it would be for a <code>record class</code>.</li>
+  </ul>
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Why struct and not just record?</strong> A plain <code>struct</code> can do the value-type storage on its own, but you'd hand-write <code>Equals</code>/<code>GetHashCode</code>/<code>ToString</code> yourself — the classic pre-C#9 way of building value objects, tedious and easy to get subtly wrong (e.g. forgetting to keep <code>GetHashCode</code> consistent with <code>Equals</code>). <code>record struct</code> is strictly the same capability with the boilerplate generated for you.
+    </div>
+  </div>
+
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Type</th><th>Equality</th><th>Mutable?</th><th>Use when</th></tr></thead>
+      <thead><tr><th>Type</th><th>Storage</th><th>Equality</th><th>Mutable?</th><th>Use when</th></tr></thead>
       <tbody>
-        <tr><td><code>class</code></td><td>Reference (same object?)</td><td>Yes</td><td>Entities with identity and behaviour — <code>Booking</code></td></tr>
-        <tr><td><code>record</code></td><td>Value (same data?)</td><td>By default, no</td><td>DTOs, messages, value objects — <code>BookingEvent</code></td></tr>
-        <tr><td><code>struct</code></td><td>Value</td><td>Yes (avoid mutable structs)</td><td>Small value types — <code>DateTime</code>, <code>Guid</code>, <code>TimeSpan</code></td></tr>
-        <tr><td><code>interface</code></td><td>—</td><td>—</td><td>Contracts — <code>IBookingRepository</code></td></tr>
+        <tr><td><code>class</code></td><td>Heap</td><td>Reference (same object?)</td><td>Yes</td><td>Entities with identity and behaviour — <code>Booking</code></td></tr>
+        <tr><td><code>record</code> (= <code>record class</code>)</td><td>Heap</td><td>Value (same data?)</td><td>By default, no</td><td>DTOs, messages — <code>BookingEvent</code></td></tr>
+        <tr><td><code>struct</code></td><td>Stack / inline</td><td>Reference, unless hand-written</td><td>Yes (avoid mutable structs)</td><td>Small value types — <code>DateTime</code>, <code>Guid</code>, <code>TimeSpan</code></td></tr>
+        <tr><td><code>record struct</code></td><td>Stack / inline</td><td>Value, generated</td><td>By default, no (<code>readonly record struct</code>)</td><td>Value Objects — <code>SeatId</code>, <code>EventId</code></td></tr>
+        <tr><td><code>interface</code></td><td>—</td><td>—</td><td>—</td><td>Contracts — <code>IBookingRepository</code></td></tr>
       </tbody>
     </table>
   </div>
@@ -491,6 +531,26 @@ booking.<span class="me">Confirm</span>();             <span class="cm">// ✅ o
       EF Core uses reflection to set <code>private set</code> properties when materialising objects from the database. Reflection bypasses all access modifiers — <code>private</code>, <code>protected</code>, all of them. EF Core is the framework, not your application code, so this is intentional. Your code still can't bypass it — only the framework can.
     </div>
   </div>
+
+  <h3>private set — why, in plain terms</h3>
+  <p><code>private set</code> is not about whether a value can change — the value objects section above already covers immutability of the <em>value itself</em>. It's a rule about <em>who's allowed to touch the doorknob</em>: only code written inside the declaring class can assign. Code outside — Program.cs, a controller, a test — cannot write <code>booking.EventId = something</code>; the compiler blocks it outright.</p>
+  <p>Grounded example — a bank account:</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>concept</span></div>
+    <pre><span class="kw">public class</span> <span class="ty">BankAccount</span>
+{
+    <span class="kw">public decimal</span> Balance { <span class="kw">get</span>; <span class="kw">private set</span>; }
+
+    <span class="kw">public void</span> <span class="me">Deposit</span>(<span class="kw">decimal</span> amount) => Balance += amount;
+    <span class="kw">public void</span> <span class="me">Withdraw</span>(<span class="kw">decimal</span> amount)
+    {
+        <span class="kw">if</span> (amount > Balance) <span class="kw">throw new</span> <span class="ty">InvalidOperationException</span>(<span class="st">"Insufficient funds"</span>);
+        Balance -= amount;
+    }
+}</pre>
+  </div>
+  <p>Outside code can read <code>account.Balance</code> freely — no risk there. But <code>account.Balance = 1_000_000;</code> does not compile — the only doors in are <code>Deposit()</code> and <code>Withdraw()</code>, which enforce the "can't withdraw more than you have" rule. If <code>Balance</code> had a <code>public set</code>, anyone could assign a number directly and bypass that rule entirely — free money, no <code>Withdraw()</code> call, no check.</p>
+  <p>Same idea on <code>Booking.EventId</code>/<code>Booking.SeatId</code>: <code>private set</code> means the only door in is <code>Create()</code> (or a future method written on <code>Booking</code> itself). Nobody outside can reach in and do <code>booking.EventId = new EventId("swap-the-event")</code> and silently corrupt the aggregate — they're forced through the methods where the rules actually live. The record struct's own constructor guards the <em>value</em> being valid; <code>private set</code> on the aggregate's property guards <em>who's allowed to reassign it at all</em> — two different layers of protection, not the same concern twice.</p>
 
   <h3>init — write-once properties (C# 9+)</h3>
   <p><code>init</code> allows a property to be set during object initialisation but never again. Unlike <code>private set</code>, it can be set from outside the class — but only in an object initialiser or constructor.</p>
@@ -880,68 +940,99 @@ _context.Bookings.<span class="me">FindAsync</span>(id)
     <span class="kw">await</span> repository.<span class="me">SaveAsync</span>();</pre>
   </div>
 
-  <h3>IEnumerable vs IQueryable — why they're different</h3>
-  <p>Two different signatures, two different languages, two different places the code runs:</p>
+  <h3>IEnumerable vs IQueryable — why the same-looking code runs in two different places</h3>
+  <p><code>.Where()</code> looks identical whether you call it on a <code>List&lt;T&gt;</code> or on <code>db.Bookings</code>. But behind the scenes they compile to completely different things, and that decides whether the filtering happens <strong>in the database</strong> or <strong>in your app's memory</strong>.</p>
+
+  <p><strong>Step 1 — the two flavours of LINQ.</strong> "LINQ" isn't one thing; it's a syntax that different providers implement differently:</p>
   <ul>
-    <li><strong>LINQ-to-Objects (IEnumerable)</strong> — your lambda compiles into a <strong>delegate</strong> (a real C# function pointer). The loop calls this function for each item, in memory. The data must already exist to loop over it.</li>
-    <li><strong>LINQ-to-Entities (IQueryable)</strong> — your lambda compiles into an <strong>expression tree</strong> (a data structure that describes the query without running it). EF Core walks the tree and translates it into SQL. The database executes it.</li>
+    <li><strong>LINQ-to-Objects</strong> — powers <code>IEnumerable&lt;T&gt;</code> (e.g. a <code>List&lt;T&gt;</code> already sitting in memory). Runs plain C#.</li>
+    <li><strong>LINQ-to-Entities</strong> — powers <code>IQueryable&lt;T&gt;</code> (e.g. <code>db.Bookings</code> in EF Core). Runs as SQL, in the database.</li>
   </ul>
+
+  <p><strong>Step 2 — the two methods have different signatures</strong>, and that's the actual mechanism that causes the split:</p>
   <div class="code-block">
     <div class="code-label"><span><span class="code-dot"></span>The signatures say it all</span></div>
-    <pre><span class="cm">// IEnumerable.Where — takes a compiled DELEGATE</span>
+    <pre><span class="cm">// LINQ-to-Objects — Where() on IEnumerable&lt;T&gt; takes a compiled DELEGATE</span>
 <span class="kw">public static</span> <span class="ty">IEnumerable</span>&lt;<span class="ty">T</span>&gt; <span class="me">Where</span>(<span class="kw">this</span> <span class="ty">IEnumerable</span>&lt;<span class="ty">T</span>&gt; source, <span class="ty">Func</span>&lt;<span class="ty">T</span>, <span class="kw">bool</span>&gt; predicate)
 <span class="cm">//                                                        ^^^^^^^^^^^^^^^^^^^^^^^^</span>
-<span class="cm">//                                                        a DELEGATE — real executable C# code</span>
+<span class="cm">//                                                        a DELEGATE — your lambda, compiled straight into real,</span>
+<span class="cm">//                                                        runnable C# code. It's just a method now.</span>
 
-<span class="cm">// IQueryable.Where — takes an EXPRESSION TREE</span>
+<span class="cm">// LINQ-to-Entities — Where() on IQueryable&lt;T&gt; takes an EXPRESSION TREE</span>
 <span class="kw">public static</span> <span class="ty">IQueryable</span>&lt;<span class="ty">T</span>&gt; <span class="me">Where</span>(<span class="kw">this</span> <span class="ty">IQueryable</span>&lt;<span class="ty">T</span>&gt; source, <span class="ty">Expression</span>&lt;<span class="ty">Func</span>&lt;<span class="ty">T</span>, <span class="kw">bool</span>&gt;&gt; predicate)
 <span class="cm">//                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>
-<span class="cm">//                                                        an EXPRESSION TREE — data describing code, not code itself</span>
-    </pre>
+<span class="cm">//                                                        an EXPRESSION TREE — your lambda, kept as DATA describing</span>
+<span class="cm">//                                                        what it does ("compare Status to 'Confirmed'"), NOT run yet.</span></pre>
   </div>
-  <p><strong>The practical difference:</strong> a delegate is a function that runs immediately when you call it; an expression tree is a data structure that EF Core walks and translates into SQL:</p>
+  <p>Same lambda you write — <code>b =&gt; b.Status == "Confirmed"</code> — but the C# compiler produces one of two totally different things, purely based on whether the variable's static type is <code>IEnumerable&lt;T&gt;</code> or <code>IQueryable&lt;T&gt;</code>:</p>
+  <ul>
+    <li>Against <code>IEnumerable&lt;T&gt;</code> → compiled into a runnable delegate. It executes immediately, once per item, in a loop.</li>
+    <li>Against <code>IQueryable&lt;T&gt;</code> → compiled into an expression tree. Nothing executes yet — it's just a data structure sitting there, waiting.</li>
+  </ul>
+
+  <p><strong>Step 3 — what "waiting" means in practice.</strong> EF Core only reads that expression tree and turns it into SQL text at the very last moment — when you call <code>.ToListAsync()</code> (or <code>.First()</code>, <code>.Count()</code>, etc.). Before that point, no SQL exists and the database hasn't been touched at all:</p>
   <div class="code-block">
-    <div class="code-label"><span><span class="code-dot"></span>Same lambda, different timing and location</span></div>
-    <pre><span class="cm">// IQueryable — expression tree is built but NOT executed</span>
-<span class="kw">var</span> query = db.Bookings.<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>);
-<span class="cm">// Right now: no database call, no filtering. Just a tree sitting in memory saying</span>
-<span class="cm">// "when you ask for results, filter by Status = Confirmed".</span>
+    <div class="code-label"><span><span class="code-dot"></span>IQueryable — filtering happens in the database</span></div>
+    <pre><span class="kw">var</span> query = db.Bookings.<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>);
+<span class="cm">// So far: an expression tree exists in memory. NO database call yet.</span>
 
 <span class="kw">var</span> results = <span class="kw">await</span> query.<span class="me">ToListAsync</span>();
-<span class="cm">// NOW: EF Core reads the tree, produces SQL, runs it in the DB, only matching rows return</span>
-
-<span class="cm">// IEnumerable — delegate is executed immediately on every call</span>
-<span class="kw">var</span> all = repository.<span class="me">GetAll</span>();
-<span class="cm">// Right now: "SELECT * FROM Bookings" already ran. ALL 5 million rows are in memory.</span>
+<span class="cm">// NOW: EF Core reads the tree and generates real SQL —</span>
+<span class="cm">//   SELECT * FROM Bookings WHERE Status = 'Confirmed'</span>
+<span class="cm">// — sends it to the database. The DATABASE filters. Only 2 matching rows travel back.</span></pre>
+  </div>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>IEnumerable — filtering happens in your app</span></div>
+    <pre><span class="kw">var</span> all = repository.<span class="me">GetAll</span>();
+<span class="cm">// GetAll()'s implementation already called Database.ReadAll&lt;T&gt;() and returned a List&lt;T&gt;.</span>
+<span class="cm">// That query ALREADY ran, in full, before this line finished. 5 million rows are now in memory.</span>
 
 <span class="kw">var</span> results = all.<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>).<span class="me">ToList</span>();
-<span class="cm">// The delegate runs in C#, looping through 5M objects already loaded, keeping only 2</span>
-    </pre>
+<span class="cm">// This is just a C# loop over data that already arrived. The delegate runs 5 million times</span>
+<span class="cm">// in your app's memory, checking each one, keeping only 2. The database is not involved here at all.</span></pre>
   </div>
-  <p><strong>Where the difference matters — same query, opposite behavior:</strong></p>
-  <div class="code-block">
-    <div class="code-label"><span><span class="code-dot"></span>IQueryable (database filters) vs IEnumerable (app filters)</span></div>
-    <pre><span class="cm">// IQueryable — the .Where() call becomes part of the SQL</span>
-<span class="kw">var</span> query = db.Bookings                              <span class="cm">// db.Bookings is IQueryable</span>
-    .<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>);       <span class="cm">// builds a tree, no DB call yet</span>
-<span class="kw">var</span> results = <span class="kw">await</span> query.<span class="me">ToListAsync</span>();        <span class="cm">// NOW: EF translates tree to SQL</span>
-<span class="cm">// Sent to database: SELECT * FROM Bookings WHERE Status = 'Confirmed'</span>
-<span class="cm">// Returns: 2 rows (only the matching ones)</span>
 
-<span class="cm">// IEnumerable — all data is already fetched before the .Where() is called</span>
-<span class="kw">var</span> all = repository.<span class="me">GetAll</span>();                    <span class="cm">// runs immediately, returns List&lt;T&gt;</span>
-<span class="cm">// Already in memory: 5 million rows</span>
-<span class="kw">var</span> results = all                                       <span class="cm">// delegates run in C#</span>
-    .<span class="me">Where</span>(b => b.Status == <span class="st">"Confirmed"</span>)          <span class="cm">// loops 5M rows, keeps 2</span>
-    .<span class="me">ToList</span>();
-    </pre>
-  </div>
   <div class="callout note">
     <div class="callout-icon">💡</div>
     <div class="callout-body">
-      <strong>Rule:</strong> With EF Core, you want your filtering in SQL, not C#. That means always use <code>IQueryable</code>. The moment a method returns <code>IEnumerable</code> or <code>List&lt;T&gt;</code>, the data is already fetched and in memory — any <code>.Where()</code> after that filters in C# on rows that already exist.
+      <strong>Rule:</strong> With EF Core, always filter through <code>IQueryable</code> (<code>db.Bookings.Where(...)</code>) so the database does the work. The moment code returns <code>IEnumerable&lt;T&gt;</code> or <code>List&lt;T&gt;</code> (like <code>GetAll()</code>), the query has already fully run — any <code>.Where()</code> chained after that filters in C#, on data that's already been pulled into memory.
     </div>
   </div>
+
+  <h3>Caveat — IEnumerable itself doesn't promise "already loaded"</h3>
+  <p>Everything above described one specific case: <code>GetAll()</code> returns a <code>List&lt;T&gt;</code>, and a <code>List&lt;T&gt;</code> is always fully loaded, eager data. But <strong>the <code>IEnumerable&lt;T&gt;</code> interface itself makes no such promise</strong> — it just means "you can be looped over with <code>foreach</code>." What's actually <em>behind</em> that interface can be eager (a <code>List&lt;T&gt;</code>, already sitting in memory) or lazy (something that computes each item only when asked). Both are valid `IEnumerable&lt;T&gt;`s.</p>
+
+  <p><strong>The lazy case: <code>yield return</code>.</strong> This is a C# keyword that builds a lazy sequence — an <em>iterator</em> — instead of a pre-built list:</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>A lazy IEnumerable using yield</span></div>
+    <pre><span class="kw">public static</span> <span class="ty">IEnumerable</span>&lt;<span class="kw">int</span>&gt; <span class="me">CountUpForever</span>()
+{
+    <span class="kw">int</span> i = <span class="nu">0</span>;
+    <span class="kw">while</span> (<span class="kw">true</span>)
+    {
+        <span class="kw">yield return</span> i;   <span class="cm">// pause HERE. Hand back one value. Wait to be asked for the next.</span>
+        i++;
+    }
+}
+
+<span class="kw">var</span> numbers = <span class="me">CountUpForever</span>();      <span class="cm">// nothing runs yet — the loop body hasn't executed at all</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> n <span class="kw">in</span> numbers.<span class="me">Take</span>(<span class="nu">3</span>))  <span class="cm">// NOW it runs, one iteration at a time, only 3 times</span>
+    <span class="ty">Console</span>.<span class="me">WriteLine</span>(n);        <span class="cm">// prints 0, 1, 2 — the "while(true)" never actually finishes</span></pre>
+  </div>
+  <p>Notice this method could loop forever, yet calling it doesn't hang — because <strong>nothing inside the method body runs until you actually iterate</strong>. Each call to <code>MoveNext()</code> (which <code>foreach</code> does under the hood) resumes the method exactly where it last paused at <code>yield return</code>, computes one more value, and pauses again. That's a genuinely lazy <code>IEnumerable&lt;T&gt;</code> — the opposite of <code>GetAll()</code>'s <code>List&lt;T&gt;</code>, which is fully computed before you ever touch it.</p>
+
+  <p><strong>So which is it — is <code>IEnumerable</code> lazy or eager?</strong> It depends entirely on what produced it:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>What's behind the <code>IEnumerable&lt;T&gt;</code></th><th>Eager or lazy?</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>A <code>List&lt;T&gt;</code> or array</td><td><strong>Eager</strong> — fully computed already</td><td><code>repository.GetAll()</code></td></tr>
+        <tr><td>A method using <code>yield return</code></td><td><strong>Lazy</strong> — computes one item at a time, on demand</td><td><code>CountUpForever()</code> above</td></tr>
+        <tr><td>A LINQ chain (<code>.Where()</code>, <code>.Select()</code>) over either of the above</td><td><strong>Lazy in timing</strong> — waits for <code>foreach</code>/<code>.ToList()</code> to run at all</td><td><code>all.Where(b =&gt; ...)</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>That third row is the subtle one: even <code>.Where()</code> called on an already-eager <code>List&lt;T&gt;</code> doesn't filter immediately — the filtering itself is deferred until you enumerate. But — and this is the point that matters for the EF Core discussion above — <strong>deferred timing is not the same as deferred location</strong>. Whenever that <code>.Where()</code> does run, it's still a C# loop, still in your app's memory, still working over a list that was already fully pulled from the database. Laziness in <em>when</em> the filter runs never changes <em>where</em> it runs. Only <code>IQueryable&lt;T&gt;</code> changes <em>where</em> — by building an expression tree and letting EF Core translate it into SQL that the database itself executes.</p>
 
   <h3>Collection types</h3>
   <div class="table-wrap">
@@ -1463,6 +1554,178 @@ services.<span class="me">AddScoped</span>&lt;<span class="ty">IBookingRepositor
     <div class="callout-body">
       <strong>Static ≠ untestable in all cases</strong>
       A static class whose methods only use parameters (nothing stored, no globals) is perfectly testable — you just call the method with test inputs. The testability problem arises when a static class holds global state or creates its own dependencies internally. <code>GetItemsEndpoint.Register(app)</code> with a real test <code>WebApplication</code> is testable — it just isn't the kind of logic you'd unit test in isolation.
+    </div>
+  </div>
+
+  <h3>EF Core fundamentals — four rungs</h3>
+  <p>EF Core is an <strong>ORM</strong> (Object-Relational Mapper): its entire job is translating between two worlds that don't naturally match — your C# objects (<code>Booking</code>, typed properties) and relational tables (rows/columns of raw SQL types). Without it, you'd write raw SQL strings and manually map result rows into objects by hand.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Rung</th><th>Concept</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>1</strong></td>
+          <td>The Model</td>
+          <td>Before EF can translate anything it needs a map of your domain: which classes are tables, which properties are columns, what the primary key is, how types convert. Built by reflecting over every <code>DbSet&lt;T&gt;</code> on your <code>DbContext</code>, combined with <strong>conventions</strong> (default guesses — "a property called <code>Id</code> is the primary key") plus any explicit configuration overriding those guesses (like <code>HasConversion</code> below). Built once per process, then cached — <code>OnModelCreating</code> does not re-run on every query.</td>
+        </tr>
+        <tr>
+          <td><strong>2</strong></td>
+          <td><code>DbContext</code></td>
+          <td>The runtime object holding the model — your session with the database. Requires <code>DbContextOptions</code> to even be constructed (no parameterless constructor exists), because the model-building step needs to know <em>which provider's conventions</em> to apply — SQL Server defaults <code>decimal</code> to <code>decimal(18,2)</code>, a <code>string</code> to <code>nvarchar(max)</code>, another provider might differ. That decision is baked into the model at build time, not resolved lazily later, which is why the provider is a mandatory constructor input.</td>
+        </tr>
+        <tr>
+          <td><strong>3</strong></td>
+          <td><code>DbSet&lt;T&gt;</code></td>
+          <td>The query surface — <code>Bookings</code> looks like an in-memory collection you LINQ over (<code>Bookings.Where(...)</code>), but it's secretly building an expression tree that gets translated into SQL and sent to the database only when you enumerate the results (e.g. <code>.ToListAsync()</code>).</td>
+        </tr>
+        <tr>
+          <td><strong>4</strong></td>
+          <td>Change Tracking &amp; <code>SaveChanges()</code></td>
+          <td>Once you load an entity through the context, EF silently watches it. Mutating it (e.g. <code>booking.Confirm()</code> sets <code>Status</code>) creates a difference between the object's current state and the snapshot EF took at load time. <code>SaveChanges()</code> compares tracked entities against those snapshots, generates the necessary <code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code> SQL, and sends it — without you writing a line of SQL.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout note">
+    <div class="callout-icon">🧭</div>
+    <div class="callout-body">
+      <strong>One-liner tying it together</strong>
+      You hand EF a provider + connection-string bundle (<code>DbContextOptions</code>) so it can construct a <code>DbContext</code>, which builds the Model by reflecting over its <code>DbSet</code>s, then that same context lets you query through <code>DbSet</code> (LINQ → SQL), silently tracks any changes you make to loaded entities, and finally translates those tracked changes into real SQL when you call <code>SaveChanges()</code>.
+    </div>
+  </div>
+  <p>What's being constructed at each step, precisely: <code>DbContextOptionsBuilder</code> configures → produces → <code>DbContextOptions</code> (a config bag, not something with behaviour of its own) → fed into → <code>new BookingDbContext(options)</code> (constructs the context object) → that object → builds → the Model (reflecting over <code>Booking</code>, <code>EventId</code>, <code>SeatId</code>, etc). <code>DbContextOptions</code> itself constructs nothing — it's an ingredient the <code>BookingDbContext</code> constructor requires because its signature demands it.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Custom types need explicit mapping</strong>
+      EF's conventions know how to map <code>string</code>, <code>Guid</code>, <code>DateTime</code> — but a custom <code>record struct</code> Value Object like <code>EventId</code> is something EF has never seen. Model building throws: <code>"The property 'Booking.EventId' could not be mapped because it is of type 'EventId', which is not a supported primitive type..."</code> This is not a compile-time error — <code>dotnet build</code> succeeds fine, because the compiler only checks that the C# is valid, not that EF can persist it. The failure only surfaces when the model actually gets built (app startup, or <code>dotnet ef migrations add</code>).
+    </div>
+  </div>
+
+  <p>The fix is a <strong><code>ValueConverter</code></strong>, configured via <code>.HasConversion(...)</code> in <code>OnModelCreating</code> — two lambdas telling EF how to unwrap the Value Object to its primitive on the way to the DB, and rebuild it on the way back:</p>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/BookingDbContext.cs</span></div>
+    <pre><span class="kw">protected override void</span> <span class="me">OnModelCreating</span>(<span class="ty">ModelBuilder</span> modelBuilder)
+{
+    modelBuilder.<span class="me">Entity</span>&lt;<span class="ty">Booking</span>&gt;()
+        .<span class="me">Property</span>(b => b.EventId)
+        .<span class="me">HasConversion</span>(
+            eventId => eventId.Value,      <span class="cm">// C# → DB (write)</span>
+            value => <span class="kw">new</span> <span class="ty">EventId</span>(value)); <span class="cm">// DB → C# (read)</span>
+
+    modelBuilder.<span class="me">Entity</span>&lt;<span class="ty">Booking</span>&gt;()
+        .<span class="me">Property</span>(b => b.SeatId)
+        .<span class="me">HasConversion</span>(
+            seatId => seatId.Value,
+            value => <span class="kw">new</span> <span class="ty">SeatId</span>(value));
+}</pre>
+  </div>
+  <div class="callout warn">
+    <div class="callout-icon">🧭</div>
+    <div class="callout-body">
+      <strong>Why the migration this produces is empty</strong>
+      <code>HasConversion</code> signals to EF: "if you want this property mapped to a column, take it from here" — it's a translation instruction, not a schema change. Because the underlying SQL column stays exactly the same shape (still <code>nvarchar</code> either way — only the C# side gained a stronger type), generating a migration after adding this conversion produces an <strong>empty</strong> <code>Up()</code>/<code>Down()</code>. That's not a failure — it's confirmation the physical schema didn't need to change, only EF's understanding of the C# type did.
+    </div>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Design-time factory — when the CLI can't build your DbContext</strong>
+      <code>dotnet ef migrations add</code> doesn't run your app's <code>Program.cs</code>, so it has no DI container to hand it a fully-configured <code>BookingDbContext</code>. Once Booking.Infrastructure was split out (Clean Architecture) with its EF Core packages marked <code>PrivateAssets="all"</code> so they don't leak into Booking.API, the CLI lost its only path to constructing one. The fix: a class implementing <code>IDesignTimeDbContextFactory&lt;BookingDbContext&gt;</code>, which the <code>dotnet ef</code> tool automatically discovers and uses instead of your app's startup. It manually builds a <code>DbContextOptionsBuilder</code>, calls <code>UseSqlServer(...)</code> with a connection string, and returns <code>new BookingDbContext(options)</code>. The connection string can even be unreachable — model-building never opens a socket, it only needs to know which provider's conventions to apply.
+    </div>
+  </div>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/BookingDbContextFactory.cs</span></div>
+    <pre><span class="cm">// Design-time only — lets `dotnet ef migrations add` construct BookingDbContext</span>
+<span class="cm">// without needing Booking.API's DI container. Never used at runtime.</span>
+<span class="kw">public class</span> <span class="ty">BookingDbContextFactory</span> : <span class="ty">IDesignTimeDbContextFactory</span>&lt;<span class="ty">BookingDbContext</span>&gt;
+{
+    <span class="kw">public</span> <span class="ty">BookingDbContext</span> <span class="me">CreateDbContext</span>(<span class="ty">string</span>[] args)
+    {
+        <span class="kw">var</span> optionsBuilder = <span class="kw">new</span> <span class="ty">DbContextOptionsBuilder</span>&lt;<span class="ty">BookingDbContext</span>&gt;();
+        optionsBuilder.<span class="me">UseSqlServer</span>(<span class="st">"Server=localhost,1433;Database=BookingDb;..."</span>);
+        <span class="kw">return new</span> <span class="ty">BookingDbContext</span>(optionsBuilder.Options);
+    }
+}</pre>
+  </div>
+
+  <h3>Domain Events — announcing instead of asking</h3>
+  <p>A <strong>reaction</strong>, below, just means "something that happens because a booking got confirmed" — publishing a message, sending an email, logging a line. Not the confirmation itself, just what happens as a result of it.</p>
+
+  <p><strong>The starting problem:</strong> <code>Booking.Confirm()</code> used to just do <code>Status = "Confirmed"</code> and stop. Nothing else found out right away. The only reaction that exists today — publishing to RabbitMQ — happens because <code>OutboxRelayWorker</code> keeps <em>asking</em> the database, on a timer, "any booking that's Confirmed but not yet published?" using <code>PublishedAt</code> as a marker for "already handled." That's fine for one reaction, but a second reaction (say, an email) would need its own new column and its own poller, just to track "have I done this one yet?"</p>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>A Domain Event, in one line</strong>
+      A small record of something that <em>already happened</em>, named in the past tense — <code>BookingConfirmed</code>, never <code>ConfirmBooking</code>. Instead of other code asking "did this happen yet?", the aggregate itself says so, the moment it happens.
+    </div>
+  </div>
+
+  <h4 style="margin:18px 0 8px">Why not a plain C# <code>event</code>?</h4>
+  <p>A C# <code>event</code> (like a button's <code>Click</code>) needs someone to attach a listener to a <em>specific object</em>, in advance — before that object does anything. A <code>Booking</code> object doesn't work that way. It only exists for a few seconds.</p>
+  <p>The one <em>permanent</em> thing is a row in the <code>Bookings</code> SQL table, sitting on disk. The C# <code>Booking</code> object is not that row — it's a fresh copy of it, rebuilt from scratch every single time something asks for it (e.g. <code>_context.Bookings.FindAsync(id)</code> runs a SQL query and constructs a brand-new object from the result). Like asking a bank teller for a printed receipt — every request gets a new piece of paper. A note scribbled on today's receipt doesn't carry over to tomorrow's; tomorrow's request builds a fresh page from whatever the ledger says right now.</p>
+  <p>Why does the object disappear? Each web request gets its own short-lived <code>BookingDbContext</code>. Once the request ends, nothing is still holding a reference to that object, and it gets cleaned up. The booking is fine — still a row in SQL — only the temporary in-memory copy is gone. So: no object exists early enough, or stays around long enough, for anything to pre-attach a listener to it.</p>
+
+  <h4 style="margin:18px 0 8px">Why not a <code>static event</code> on the type instead?</h4>
+  <p>A <code>static event</code> lives on the <code>Booking</code> class itself, not on any one object — so you can attach a listener once, at startup, to the type, sidestepping the "no object to subscribe to" problem entirely. But invoking it directly inside <code>Confirm()</code> fires it <strong>immediately</strong>, before the database save has even happened. If the save then fails, something has already been announced (e.g. published to RabbitMQ) for a change that was never actually saved — and a message queue can't un-send a message.</p>
+  <p>Moving the invocation to <em>after</em> the save succeeds fixes the timing, but brings back the original problem: every place that calls <code>Confirm()</code> would need to remember to also add that invocation line afterward — forget it once in some new endpoint, and the announcement silently never happens, no error, no crash.</p>
+  <p>Gluing the invocation <em>inside</em> the save method itself fixes both problems — but the save method still needs to know <em>which</em> booking, <em>which</em> event, to invoke it correctly. A static event has no way to carry that information per booking; you'd need a list (below) to answer that question regardless, which makes the static event a pointless extra layer once the list already exists.</p>
+
+  <h4 style="margin:18px 0 8px">The mechanism actually used — a list on the aggregate</h4>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Domain/Booking.cs</span></div>
+    <pre><span class="kw">private readonly</span> <span class="ty">List</span>&lt;<span class="ty">object</span>&gt; _domainEvents = <span class="kw">new</span>();
+<span class="kw">public</span> <span class="ty">IReadOnlyCollection</span>&lt;<span class="ty">object</span>&gt; DomainEvents => _domainEvents.<span class="me">AsReadOnly</span>();
+<span class="kw">public void</span> <span class="me">ClearDomainEvents</span>() => _domainEvents.<span class="me">Clear</span>();
+
+<span class="kw">public void</span> <span class="me">Confirm</span>()
+{
+    <span class="cm">// ...checks...</span>
+    Status = <span class="st">"Confirmed"</span>;
+    _domainEvents.<span class="me">Add</span>(<span class="kw">new</span> <span class="ty">BookingConfirmed</span>(Id)); <span class="cm">// just a note — nothing sent yet</span>
+}</pre>
+  </div>
+  <p>Right after <code>Confirm()</code> runs, nothing has actually happened outside this object — no message sent, no log written. The note is just sitting in memory, on that one booking.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>"Raise" and "dispatch" are two different steps</strong>
+      <strong>Raise</strong> = write the note. Happens inside <code>Confirm()</code>, the instant the rule fires, because that method is the only one that knows it just happened. <strong>Dispatch</strong> = read the note and act on it. Happens later, and only once the database save has actually succeeded — these two got conflated more than once while working through this, so keep them mentally separate.
+    </div>
+  </div>
+
+  <h4 style="margin:18px 0 8px">Where dispatch happens, and the <code>ChangeTracker</code> detail</h4>
+  <div class="code-block">
+    <div class="code-label"><span><span class="code-dot"></span>Booking.Infrastructure/BookingRepository.cs</span></div>
+    <pre><span class="kw">public async</span> <span class="ty">Task</span> <span class="me">SaveAsync</span>()
+{
+    <span class="kw">await</span> _context.<span class="me">SaveChangesAsync</span>(); <span class="cm">// if this fails, nothing below runs</span>
+
+    <span class="kw">var</span> bookingsWithEvents = _context.ChangeTracker.<span class="me">Entries</span>&lt;<span class="ty">Booking</span>&gt;()
+        .<span class="me">Select</span>(e => e.Entity)
+        .<span class="me">Where</span>(b => b.DomainEvents.Count > <span class="nu">0</span>);
+
+    <span class="kw">foreach</span> (<span class="kw">var</span> booking <span class="kw">in</span> bookingsWithEvents)
+    {
+        <span class="kw">foreach</span> (<span class="kw">var</span> domainEvent <span class="kw">in</span> booking.DomainEvents)
+            _logger.<span class="me">LogInformation</span>(<span class="st">"Domain event dispatched: {DomainEvent}"</span>, domainEvent);
+
+        booking.<span class="me">ClearDomainEvents</span>();
+    }
+}</pre>
+  </div>
+  <p>Dispatch lives inside <code>SaveAsync()</code> specifically because that's the one method that always saves to the database — every caller, present or future, already has to call it, so the dispatch step comes along automatically, with nothing extra to remember anywhere else.</p>
+  <p><code>_context.ChangeTracker.Entries&lt;Booking&gt;()</code> — not <code>_context.Bookings</code> — is the deliberate choice. <code>_context.Bookings</code> is the <code>DbSet</code>, meaning "the whole table"; enumerating it triggers a brand-new SQL query fetching every booking ever created. <code>ChangeTracker.Entries&lt;T&gt;()</code> asks a different question entirely: "of the objects already sitting in memory for this specific request, which ones are <code>Booking</code>s?" — no extra database round trip, and scoped precisely to what's relevant right now.</p>
+
+  <div class="callout note">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Why clear the list afterward</strong>
+      Not because the object is about to be destroyed — that happens anyway, regardless. It's because <code>BookingDbContext</code> is Scoped (one per request), so the same tracked <code>Booking</code> instance can still be alive if <code>SaveAsync()</code> happens to be called a second time within that same request. Without clearing, that second call would find the same note still sitting there and dispatch it again, for something already handled once.
     </div>
   </div>
 

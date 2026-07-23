@@ -11,9 +11,14 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- Needed now that RedisSeatReservationService (the ISeatReservationService
+         implementation) lives in this project instead of directly in Program.cs. -->
+    <PackageReference Include="StackExchange.Redis" Version="2.12.14" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Booking.Domain\Booking.Domain.csproj" />
+    <!-- Infrastructure implements ISeatReservationService, which Application defines. -->
+    <ProjectReference Include="..\Booking.Application\Booking.Application.csproj" />
   </ItemGroup>
 </Project>

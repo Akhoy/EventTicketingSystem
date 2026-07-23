@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MediatR: the mediator library. It scans this assembly at startup for classes
+         implementing IRequestHandler<T> and wires them up so IMediator.Send(command) finds
+         the right one automatically — no manual registration per handler. -->
+    <PackageReference Include="MediatR" Version="12.5.0" />
+    <!-- Handlers log via ILogger<T> (e.g. the IDOR-attempt warning in ConfirmBookingHandler) —
+         this package brings in just the ILogger abstraction, not a concrete logging provider
+         (Serilog/console/etc). The concrete provider is wired up in Program.cs, same as today. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Application depends on Domain only (Booking, IBookingRepository, EventId, SeatId) —
+         never on Infrastructure or API. Dependency direction: API -> Application -> Domain. -->
+    <ProjectReference Include="..\Booking.Domain\Booking.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
